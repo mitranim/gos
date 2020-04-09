@@ -1,0 +1,6 @@
+/*
+!/.gitignore
+!/*.go
+!/go.mod
+!/go.sum
+!/readme.md
