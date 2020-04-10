@@ -121,7 +121,6 @@ Gos is very similar to https://github.com/jmoiron/sqlx. Key differences:
 
 	* Supports null records in outer joins, as nested struct pointers
 	* Selects fields explicitly without relying on `select *`
-	* Helps to generate `insert` and `update` queries from structs
 	* Much simpler API, does not wrap `database/sql`
 	* Explicit field-column mapping, no hidden renaming
 	* No special utilities for named parameters

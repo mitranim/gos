@@ -8,15 +8,40 @@ import (
 	"github.com/mitranim/gos"
 )
 
-func ExampleQuery() {
-	type External struct {
+func ExampleCols() {
+	type Internal struct {
 		Id   string `db:"id"`
 		Name string `db:"name"`
 	}
 
+	type External struct {
+		Id       string   `db:"id"`
+		Name     string   `db:"name"`
+		Internal Internal `db:"internal"`
+	}
+
+	fmt.Println(gos.Cols(External{}))
+
+	/**
+	Formatted here for readability:
+
+	"id",
+	"name",
+	("internal")."id"   as "internal.id",
+	("internal")."name" as "internal.name"
+	*/
+}
+
+func ExampleQuery() {
 	type Internal struct {
 		Id   string `db:"id"`
 		Name string `db:"name"`
+	}
+
+	type External struct {
+		Id       string   `db:"id"`
+		Name     string   `db:"name"`
+		Internal Internal `db:"internal"`
 	}
 
 	// Step 1: generate query.
@@ -55,27 +80,4 @@ select %v from (
 	if err != nil {
 		panic(err)
 	}
-}
-
-func ExampleCols() {
-	type External struct {
-		Id   string `db:"id"`
-		Name string `db:"name"`
-	}
-
-	type Internal struct {
-		Id   string `db:"id"`
-		Name string `db:"name"`
-	}
-
-	fmt.Println(gos.Cols(External{}))
-
-	/**
-	Formatted here for readability:
-
-	"id",
-	"name",
-	("internal")."id"   as "internal.id",
-	("internal")."name" as "internal.name"
-	*/
 }
