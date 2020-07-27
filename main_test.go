@@ -745,7 +745,7 @@ func createDb(connParams []string, dbName string) error {
 
 func dropDb(connParams []string, dbName string) error {
 	return withPostgresDb(connParams, func(db *sql.DB) error {
-		_, err := db.Exec(`drop database ` + dbName)
+		_, err := db.Exec(`drop database if exists ` + dbName)
 		return err
 	})
 }
