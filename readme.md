@@ -39,7 +39,7 @@ An API for scanning rows one-by-one, like `database/sql.Rows.Scan()` but for str
 
 ## Changelog
 
-### 0.1.0
+### 0.1.1
 
 First tagged release. Adds `SqlArgs` and `SqlQuery` for query building.
 
