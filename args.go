@@ -83,9 +83,9 @@ func (self SqlArgs) NamesString() string {
 	var buf []byte
 	for i, arg := range self {
 		if i > 0 {
-			buf = append(buf, ", "...)
+			buf = append(buf, `, `...)
 		}
-		buf = stringAppendQuoted(buf, arg.Name)
+		buf = appendDelimited(buf, `"`, arg.Name, `"`)
 	}
 	return bytesToMutableString(buf)
 }
@@ -106,9 +106,9 @@ func (self SqlArgs) ValuesString() string {
 	var buf []byte
 	for i := range self {
 		if i > 0 {
-			buf = append(buf, ", "...)
+			buf = append(buf, `, `...)
 		}
-		buf = append(buf, '$')
+		buf = append(buf, `$`...)
 		buf = strconv.AppendInt(buf, int64(i+1), 10)
 	}
 	return bytesToMutableString(buf)
@@ -145,10 +145,10 @@ func (self SqlArgs) AssignmentsString() string {
 	var buf []byte
 	for i, arg := range self {
 		if i > 0 {
-			buf = append(buf, ", "...)
+			buf = append(buf, `, `...)
 		}
-		buf = stringAppendQuoted(buf, arg.Name)
-		buf = append(buf, " = $"...)
+		buf = appendDelimited(buf, `"`, arg.Name, `"`)
+		buf = append(buf, ` = $`...)
 		buf = strconv.AppendInt(buf, int64(i+1), 10)
 	}
 	return bytesToMutableString(buf)
@@ -179,10 +179,10 @@ func (self SqlArgs) ConditionsString() string {
 
 	for i, arg := range self {
 		if i > 0 {
-			buf = append(buf, " and "...)
+			buf = append(buf, ` and `...)
 		}
-		buf = stringAppendQuoted(buf, arg.Name)
-		buf = append(buf, " is not distinct from $"...)
+		buf = appendDelimited(buf, `"`, arg.Name, `"`)
+		buf = append(buf, ` is not distinct from $`...)
 		buf = strconv.AppendInt(buf, int64(i+1), 10)
 	}
 

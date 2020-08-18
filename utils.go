@@ -94,71 +94,72 @@ type sqlIdent struct {
 }
 
 func (self sqlIdent) selectString() string {
-	return bytesToStringAlloc(self.appendSelect(nil, nil))
+	return bytesToMutableString(self.appendSelect(nil, nil))
 }
 
-func (self sqlIdent) appendSelect(buf []byte, path []string) []byte {
-	if len(self.idents) == 0 {
-		if self.name == "" {
-			return buf
+func (self sqlIdent) appendSelect(buf []byte, path []sqlIdent) []byte {
+	/**
+	If the ident doesn't have a name, it's just a collection of other idents,
+	which are considered to be at the "top level". If the ident has a name, it's
+	considered to "contain" the other idents.
+	*/
+	if len(self.idents) > 0 {
+		if self.name != "" {
+			path = append(path, self)
 		}
-		if len(buf) > 0 {
-			buf = append(buf, ", "...)
-		}
-		if len(path) == 0 {
-			buf = appendIdentAlias(buf, path, self.name)
-		} else {
-			buf = appendIdentPath(buf, path, self.name)
-			buf = append(buf, " as "...)
-			buf = appendIdentAlias(buf, path, self.name)
+		for _, ident := range self.idents {
+			buf = ident.appendSelect(buf, path)
 		}
 		return buf
 	}
 
-	if self.name != "" {
-		path = append(path, self.name)
+	if self.name == "" {
+		return buf
 	}
-	for _, ident := range self.idents {
-		buf = ident.appendSelect(buf, path)
+
+	if len(buf) > 0 {
+		buf = append(buf, `, `...)
 	}
+
+	if len(path) == 0 {
+		buf = self.appendAlias(buf, nil)
+	} else {
+		buf = self.appendPath(buf, path)
+		buf = append(buf, ` as `...)
+		buf = self.appendAlias(buf, path)
+	}
+
 	return buf
 }
 
-func appendIdentPath(buf []byte, path []string, ident string) []byte {
-	for i, name := range path {
+func (self sqlIdent) appendPath(buf []byte, path []sqlIdent) []byte {
+	for i, ident := range path {
 		if i == 0 {
-			buf = append(buf, '(', '"')
-			buf = append(buf, name...)
-			buf = append(buf, '"', ')')
+			buf = appendDelimited(buf, `("`, ident.name, `")`)
 		} else {
-			buf = append(buf, '"')
-			buf = append(buf, name...)
-			buf = append(buf, '"')
+			buf = appendDelimited(buf, `"`, ident.name, `"`)
 		}
-		buf = append(buf, '.')
+		buf = append(buf, `.`...)
 	}
-	buf = append(buf, '"')
-	buf = append(buf, ident...)
-	buf = append(buf, '"')
+	buf = appendDelimited(buf, `"`, self.name, `"`)
 	return buf
 }
 
-func appendIdentAlias(buf []byte, path []string, ident string) []byte {
-	buf = append(buf, '"')
-	for _, name := range path {
-		buf = append(buf, name...)
-		buf = append(buf, '.')
+func (self sqlIdent) appendAlias(buf []byte, path []sqlIdent) []byte {
+	buf = append(buf, `"`...)
+	for _, ident := range path {
+		buf = append(buf, ident.name...)
+		buf = append(buf, `.`...)
 	}
-	buf = append(buf, ident...)
-	buf = append(buf, '"')
+	buf = append(buf, self.name...)
+	buf = append(buf, `"`...)
 	return buf
 }
 
-// Potential gotcha: the input must not contain quotes.
-func stringAppendQuoted(buf []byte, input string) []byte {
-	buf = append(buf, '"')
-	buf = append(buf, input...)
-	buf = append(buf, '"')
+func appendDelimited(buf []byte, prefix, infix, suffix string) []byte {
+	buf = append(buf, prefix...)
+	buf = append(buf, infix...)
+	buf = append(buf, suffix...)
 	return buf
 }
 
