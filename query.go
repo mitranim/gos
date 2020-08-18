@@ -205,7 +205,9 @@ Wraps the query to select the fields derived by calling `Cols(dest)`. Example:
 
 	var query SqlQuery
 	query.Append(`select * from some_table`)
-	query.WrapSelectCols(struct{Id int64 `db:"id"`}{})
+
+	var out struct{Id int64 `db:"id"`}
+	query.WrapSelectCols(out)
 
 Resulting state is roughly equivalent to:
 

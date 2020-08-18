@@ -9,9 +9,9 @@ import (
 
 /*
 Scans a struct, converting fields tagged with `db` into a sequence of named
-`SqlArgs`. The input must be a struct or a struct pointer. A nil pointer is fine
-and produces a nil result. Panics on other inputs. Treats an embedded struct as
-part of the enclosing struct.
+`SqlArgs`. The input must be a struct or a struct pointer. A nil pointer is
+fine and produces a nil result. Panics on other inputs. Treats an embedded
+struct as part of the enclosing struct.
 */
 func StructSqlArgs(input interface{}) SqlArgs {
 	rval := reflect.ValueOf(input)
