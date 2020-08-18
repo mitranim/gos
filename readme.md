@@ -19,10 +19,10 @@ See the full documentation at https://godoc.org/github.com/mitranim/gos.
 Gos is somewhat similar to [jmoiron/sqlx](https://github.com/jmoiron/sqlx). Key differences:
 
 * Supports null records in outer joins, as nested struct pointers.
-* Selects fields explicitly, by reflecting on structs, without relying on `select *`. (But _you_ can still write `select *`.)
+* Selects fields explicitly, by reflecting on the output struct. This allows _you_ to write `select *`, but if the struct is lacking some of the fields, the DB will optimize them out of the query.
 * Simpler API, does not wrap `database/sql`.
 * Explicit field-column mapping, no hidden renaming.
-* Depends only on the standard library (the `go.mod` dependencies are test-only).
+* Has only one tiny dependency (most deps in `go.mod` are test-only).
 * Can convert structs into named SQL arguments.
 * Has a simple query builder.
 * ... probably more

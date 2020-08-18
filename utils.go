@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"time"
 	"unsafe"
+
+	"github.com/mitranim/refut"
 )
 
 /*
@@ -55,7 +57,7 @@ func copyIntSlice(vals []int) []int {
 
 func isNilableOrHasNilableNonRootAncestor(fieldSpec *tFieldSpec) bool {
 	for fieldSpec != nil {
-		if isNilableRkind(fieldSpec.typeSpec.rtype.Kind()) {
+		if refut.IsRkindNilable(fieldSpec.typeSpec.rtype.Kind()) {
 			return true
 		}
 		fieldSpec = fieldSpec.parentFieldSpec
@@ -63,27 +65,30 @@ func isNilableOrHasNilableNonRootAncestor(fieldSpec *tFieldSpec) bool {
 	return false
 }
 
-func structRtypeSqlIdents(structRtype reflect.Type) []sqlIdent {
+func structRtypeSqlIdents(rtype reflect.Type) []sqlIdent {
 	var idents []sqlIdent
 
-	traverseStructRtypeFields(structRtype, func(sfield reflect.StructField) {
-		colName := structFieldColumnName(sfield)
+	err := refut.TraverseStructRtype(rtype, func(sfield reflect.StructField, _ []int) error {
+		colName := sfieldColumnName(sfield)
 		if colName == "" {
-			return
+			return nil
 		}
 
-		fieldRtype := derefRtype(sfield.Type)
+		fieldRtype := refut.RtypeDeref(sfield.Type)
 		if fieldRtype.Kind() == reflect.Struct && !isScannableRtype(fieldRtype) {
 			idents = append(idents, sqlIdent{
 				name:   colName,
 				idents: structRtypeSqlIdents(fieldRtype),
 			})
-			return
+			return nil
 		}
 
 		idents = append(idents, sqlIdent{name: colName})
-		return
+		return nil
 	})
+	if err != nil {
+		panic(err)
+	}
 
 	return idents
 }
@@ -180,159 +185,11 @@ func bytesToMutableString(bytes []byte) string {
 }
 
 /*
-TODO: consider passing the entire path from the root value rather than the field
-index. This is more expensive but allows the caller to choose to allocate deeply
-nested fields on demand.
+TODO: consider validating that the column name doesn't contain double quotes. We
+might return an error, or panic.
 */
-func traverseStructRvalueFields(rval reflect.Value, fun func(reflect.Value, int) error) error {
-	rval = derefRval(rval)
-	rtype := rval.Type()
-	if rtype.Kind() != reflect.Struct {
-		return Err{
-			Code:  ErrCodeInvalidInput,
-			While: `traversing struct fields`,
-			Cause: fmt.Errorf("expected a struct, got a %q", rtype),
-		}
-	}
-
-	for i := 0; i < rtype.NumField(); i++ {
-		sfield := rtype.Field(i)
-		if !isStructFieldPublic(sfield) {
-			continue
-		}
-
-		/**
-		If this is an embedded struct, traverse its fields as if they're in the
-		parent struct.
-		*/
-		if sfield.Anonymous && derefRtype(sfield.Type).Kind() == reflect.Struct {
-			err := traverseStructRvalueFields(rval.Field(i), fun)
-			if err != nil {
-				return err
-			}
-			continue
-		}
-
-		err := fun(rval, i)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func traverseStructRtypeFields(rtype reflect.Type, fun func(sfield reflect.StructField)) {
-	rtype = derefRtype(rtype)
-	if rtype == nil || rtype.Kind() != reflect.Struct {
-		panic(Err{
-			Code:  ErrCodeInvalidInput,
-			While: `traversing struct type fields`,
-			Cause: fmt.Errorf("expected a struct type, got a %q", rtype),
-		})
-	}
-
-	for i := 0; i < rtype.NumField(); i++ {
-		sfield := rtype.Field(i)
-		if !isStructFieldPublic(sfield) {
-			continue
-		}
-
-		/**
-		If this is an embedded struct, traverse its fields as if they're in the
-		parent struct.
-		*/
-		if sfield.Anonymous && derefRtype(sfield.Type).Kind() == reflect.Struct {
-			traverseStructRtypeFields(sfield.Type, fun)
-			continue
-		}
-
-		fun(sfield)
-	}
-}
-
-func derefRtype(rtype reflect.Type) reflect.Type {
-	for rtype != nil && rtype.Kind() == reflect.Ptr {
-		rtype = rtype.Elem()
-	}
-	return rtype
-}
-
-/*
-Recursively dereferences a `reflect.Value` until it's not a pointer type. Panics
-if any pointer in the sequence is nil.
-*/
-func derefRval(rval reflect.Value) reflect.Value {
-	for rval.Kind() == reflect.Ptr {
-		rval = rval.Elem()
-	}
-	return rval
-}
-
-/*
-Derefs the provided value until it's no longer a pointer, allocating as
-necessary. Returns a non-pointer value. The input value must be settable or a
-non-nil pointer, otherwise this causes a panic.
-*/
-func derefAllocRval(rval reflect.Value) reflect.Value {
-	for rval.Kind() == reflect.Ptr {
-		if rval.IsNil() {
-			rval.Set(reflect.New(rval.Type().Elem()))
-		}
-		rval = rval.Elem()
-	}
-	return rval
-}
-
-/*
-Finds or allocates an rval at the given struct field path, returning the
-resulting reflect value. If the starting value is settable, the resulting value
-should also be settable. Ditto if the starting value is a non-nil pointer and
-the path is not empty.
-
-Assumes that every type on the path, starting with the root, is a struct type or
-an arbitrarily nested struct pointer type. Panics if the assumption doesn't
-hold.
-*/
-func derefAllocStructRvalAt(rval reflect.Value, path []int) reflect.Value {
-	for _, i := range path {
-		rval = derefAllocRval(rval)
-		rval = rval.Field(i)
-	}
-	return rval
-}
-
-func isStructFieldPublic(sfield reflect.StructField) bool {
-	return sfield.PkgPath == ""
-}
-
-func structFieldColumnName(sfield reflect.StructField) string {
-	tag := sfield.Tag.Get("db")
-	if tag == "-" {
-		return ""
-	}
-	return tag
-}
-
-func isNilableRkind(kind reflect.Kind) bool {
-	switch kind {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
-		return true
-	default:
-		return false
-	}
-}
-
-func isRvalNil(rval reflect.Value) bool {
-	return !rval.IsValid() || isNilableRkind(rval.Kind()) && rval.IsNil()
-}
-
-/*
-Difference from `value == nil`: returns `true` if the input is a non-nil
-`interface{}` whose value is a nil pointer, slice, etc.
-*/
-func isNil(value interface{}) bool {
-	return value == nil || isRvalNil(reflect.ValueOf(value))
+func sfieldColumnName(sfield reflect.StructField) string {
+	return refut.TagIdent(sfield.Tag.Get("db"))
 }
 
 /*

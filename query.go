@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/mitranim/refut"
 )
 
 /*
@@ -73,7 +75,7 @@ Variant of `SqlQuery.Append` that only appends if the provided argument is not
 nil.
 */
 func (self *SqlQuery) MaybeAppend(chunk string, arg interface{}) {
-	if !isNil(arg) {
+	if !refut.IsNil(arg) {
 		self.Append(chunk, arg)
 	}
 }

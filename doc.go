@@ -30,7 +30,7 @@ ignored. Example:
 	}
 
 2. Fields of embedded structs are treated as part of the enclosing struct. For
-example, these two definitions are completely equivalent:
+example, the following two definitions are completely equivalent.
 
 	type Result struct {
 		A string `db:"a"`
@@ -39,6 +39,8 @@ example, these two definitions are completely equivalent:
 	type Embedded struct {
 		B string `db:"b"`
 	}
+
+Same as:
 
 	type Result struct {
 		A string `db:"a"`
@@ -92,13 +94,15 @@ Gos is somewhat similar to https://github.com/jmoiron/sqlx. Key differences:
 
 • Supports null records in outer joins, as nested struct pointers.
 
-• Selects fields explicitly, by reflecting on structs, without relying on `select *`. (But _you_ can still write `select *`.)
+• Selects fields explicitly, by reflecting on the output struct. This allows
+YOU to write `select *`, but if the struct is lacking some of the fields, the
+DB will optimize them out of the query.
 
 • Simpler API, does not wrap `database/sql`.
 
 • Explicit field-column mapping, no hidden renaming.
 
-• Depends only on the standard library (the `go.mod` dependencies are test-only).
+• Has only one tiny dependency (most deps in `go.mod` are test-only).
 
 • Can convert structs into named SQL arguments.
 

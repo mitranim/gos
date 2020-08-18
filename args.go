@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"regexp"
 	"strconv"
+
+	"github.com/mitranim/refut"
 )
 
 /*
@@ -15,25 +17,30 @@ struct as part of the enclosing struct.
 */
 func StructSqlArgs(input interface{}) SqlArgs {
 	rval := reflect.ValueOf(input)
-	if isRvalNil(rval) {
+	rtype := refut.RtypeDeref(rval.Type())
+
+	if rtype.Kind() != reflect.Struct {
+		panic(Err{
+			Code:  ErrCodeInvalidInput,
+			While: `traversing struct to get named args`,
+			Cause: fmt.Errorf("expected struct, got %q", rtype),
+		})
+	}
+
+	if refut.IsRvalNil(rval) {
 		return nil
 	}
 
 	var args SqlArgs
 
-	err := traverseStructRvalueFields(rval, func(structRval reflect.Value, fieldIndex int) error {
-		sfield := structRval.Type().Field(fieldIndex)
-		colName := structFieldColumnName(sfield)
+	err := refut.TraverseStructRval(rval, func(rval reflect.Value, sfield reflect.StructField, _ []int) error {
+		colName := sfieldColumnName(sfield)
 		if colName == "" {
 			return nil
 		}
-		args = append(args, SqlArg{
-			Name:  colName,
-			Value: structRval.Field(fieldIndex).Interface(),
-		})
+		args = append(args, Named(colName, rval.Interface()))
 		return nil
 	})
-
 	if err != nil {
 		panic(err)
 	}
@@ -230,5 +237,5 @@ func (self SqlArg) IsValid() bool {
 var columnNameRegexp = regexp.MustCompile(`^(?:\w+(?:\.\w+)*|"\w+(?:\.\w+)*")$`)
 
 func (self SqlArg) IsNil() bool {
-	return isNil(self.Value)
+	return refut.IsNil(self.Value)
 }
