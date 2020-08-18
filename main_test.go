@@ -69,7 +69,7 @@ func runTestMain(m *testing.M) int {
 	*/
 	testTx, err = db.Begin()
 	if err != nil {
-		panic(fmt.Errorf("failed to start DB transaction: %+v", err))
+		panic(fmt.Errorf("failed to start DB transaction: %w", err))
 	}
 	defer testTx.Rollback()
 
@@ -733,6 +733,23 @@ func TestStructMissingColSrc(t *testing.T) {
 	expected := Result{One: "one", Two: "two", Three: strptr("three"), Four: &Result{One: "four"}}
 	if !reflect.DeepEqual(expected, result) {
 		t.Fatalf(`expected %#v, got %#v`, expected, result)
+	}
+}
+
+func TestCols(t *testing.T) {
+	type Nested struct {
+		Val *string `db:"val"`
+	}
+
+	type Nesting struct {
+		Val    string  `db:"val"`
+		Nested *Nested `db:"nested"`
+	}
+
+	actual := Cols(Nesting{})
+	expected := `"val", ("nested")."val" as "nested.val"`
+	if expected != actual {
+		t.Fatalf(`expected Cols() to produce %q, got %q`, expected, actual)
 	}
 }
 
