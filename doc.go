@@ -11,7 +11,7 @@ Key Features
 
 • Supports nilable nested records/structs in outer joins.
 
-• Supports generating named SQL arguments from structs. See `StructSqlArgs()`.
+• Supports generating named SQL arguments from structs. See `StructNamedArgs()`.
 
 • Query builder oriented towards plain SQL. (No DSL in Go.) See `SqlQuery`.
 

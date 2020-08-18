@@ -11,11 +11,11 @@ import (
 
 /*
 Scans a struct, converting fields tagged with `db` into a sequence of named
-`SqlArgs`. The input must be a struct or a struct pointer. A nil pointer is
+`NamedArgs`. The input must be a struct or a struct pointer. A nil pointer is
 fine and produces a nil result. Panics on other inputs. Treats an embedded
 struct as part of the enclosing struct.
 */
-func StructSqlArgs(input interface{}) SqlArgs {
+func StructNamedArgs(input interface{}) NamedArgs {
 	rval := reflect.ValueOf(input)
 	rtype := refut.RtypeDeref(rval.Type())
 
@@ -31,7 +31,7 @@ func StructSqlArgs(input interface{}) SqlArgs {
 		return nil
 	}
 
-	var args SqlArgs
+	var args NamedArgs
 
 	err := refut.TraverseStructRval(rval, func(rval reflect.Value, sfield reflect.StructField, _ []int) error {
 		colName := sfieldColumnName(sfield)
@@ -50,14 +50,14 @@ func StructSqlArgs(input interface{}) SqlArgs {
 
 /*
 Sequence of named SQL arguments with utility methods for query building.
-Usually obtained by calling `StructSqlArgs()`.
+Usually obtained by calling `StructNamedArgs()`.
 */
-type SqlArgs []SqlArg
+type NamedArgs []NamedArg
 
 /*
 Returns the argument names.
 */
-func (self SqlArgs) Names() []string {
+func (self NamedArgs) Names() []string {
 	var names []string
 	for _, arg := range self {
 		names = append(names, arg.Name)
@@ -68,7 +68,7 @@ func (self SqlArgs) Names() []string {
 /*
 Returns the argument values.
 */
-func (self SqlArgs) Values() []interface{} {
+func (self NamedArgs) Values() []interface{} {
 	var values []interface{}
 	for _, arg := range self {
 		values = append(values, arg.Value)
@@ -79,14 +79,14 @@ func (self SqlArgs) Values() []interface{} {
 /*
 Returns comma-separated argument names, suitable for a `select` clause. Example:
 
-	args := gos.SqlArgs{{"one", 10}, {"two", 20}}
+	args := gos.NamedArgs{gos.Named("one", 10), gos.Named("two", 20)}
 
 	fmt.Sprintf(`select %v`, args.NamesString())
 
 	// Output:
 	`select "one", "two"`
 */
-func (self SqlArgs) NamesString() string {
+func (self NamedArgs) NamesString() string {
 	var buf []byte
 	for i, arg := range self {
 		if i > 0 {
@@ -101,7 +101,7 @@ func (self SqlArgs) NamesString() string {
 Returns parameter placeholders in the Postgres style `$N`, comma-separated,
 suitable for a `values` clause. Example:
 
-	args := gos.SqlArgs{{"one", 10}, {"two", 20}}
+	args := gos.NamedArgs{gos.Named("one", 10), gos.Named("two", 20)}
 
 	fmt.Sprintf(`values (%v)`, args.ValuesString())
 
@@ -109,7 +109,7 @@ suitable for a `values` clause. Example:
 	`values ($1, $2)`
 */
 
-func (self SqlArgs) ValuesString() string {
+func (self NamedArgs) ValuesString() string {
 	var buf []byte
 	for i := range self {
 		if i > 0 {
@@ -124,14 +124,14 @@ func (self SqlArgs) ValuesString() string {
 /*
 Returns the string of names and values suitable for an `insert` clause. Example:
 
-	args := gos.SqlArgs{{"one", 10}, {"two", 20}}
+	args := gos.NamedArgs{gos.Named("one", 10), gos.Named("two", 20)}
 
 	fmt.Sprintf(`insert into some_table %v`, args.NamesAndValuesString())
 
 	// Output:
 	`insert into some_table ("one", "two") values ($1, $2)`
 */
-func (self SqlArgs) NamesAndValuesString() string {
+func (self NamedArgs) NamesAndValuesString() string {
 	if len(self) == 0 {
 		return "default values"
 	}
@@ -141,14 +141,14 @@ func (self SqlArgs) NamesAndValuesString() string {
 /*
 Returns the string of assignments suitable for an `update set` clause. Example:
 
-	args := gos.SqlArgs{{"one", 10}, {"two", 20}}
+	args := gos.NamedArgs{gos.Named("one", 10), gos.Named("two", 20)}
 
 	fmt.Sprintf(`update some_table set %v`, args.AssignmentsString())
 
 	// Output:
 	`update some_table set "one" = $1, "two" = $2`
 */
-func (self SqlArgs) AssignmentsString() string {
+func (self NamedArgs) AssignmentsString() string {
 	var buf []byte
 	for i, arg := range self {
 		if i > 0 {
@@ -165,7 +165,7 @@ func (self SqlArgs) AssignmentsString() string {
 Returns the string of conditions suitable for a `where` or `join` clause.
 Example:
 
-	args := gos.SqlArgs{{"one", 10}, {"two", 20}}
+	args := gos.NamedArgs{gos.Named("one", 10), gos.Named("two", 20)}
 
 	fmt.Sprintf(`select * from some_table where %v`, args.ConditionsString())
 
@@ -177,7 +177,7 @@ Example:
 		"two" is not distinct from $2
 	`
 */
-func (self SqlArgs) ConditionsString() string {
+func (self NamedArgs) ConditionsString() string {
 	if len(self) == 0 {
 		return "true"
 	}
@@ -199,9 +199,9 @@ func (self SqlArgs) ConditionsString() string {
 /*
 Returns true if at least one argument satisfies the predicate function. Example:
 
-  args.Some(SqlArg.IsNil)
+  args.Some(NamedArg.IsNil)
 */
-func (self SqlArgs) Some(fun func(SqlArg) bool) bool {
+func (self NamedArgs) Some(fun func(NamedArg) bool) bool {
 	for _, arg := range self {
 		if fun != nil && fun(arg) {
 			return true
@@ -213,9 +213,9 @@ func (self SqlArgs) Some(fun func(SqlArg) bool) bool {
 /*
 Returns true if every argument satisfies the predicate function. Example:
 
-  args.Every(SqlArg.IsNil)
+  args.Every(NamedArg.IsNil)
 */
-func (self SqlArgs) Every(fun func(SqlArg) bool) bool {
+func (self NamedArgs) Every(fun func(NamedArg) bool) bool {
 	for _, arg := range self {
 		if fun == nil || !fun(arg) {
 			return false
@@ -224,18 +224,22 @@ func (self SqlArgs) Every(fun func(SqlArg) bool) bool {
 	return true
 }
 
-// Same as `sql.NamedArg`, with additional methods. See `SqlArgs`.
-type SqlArg struct {
+// Same as `sql.NamedArg`, with additional methods. See `NamedArgs`.
+type NamedArg struct {
 	Name  string
 	Value interface{}
 }
 
-func (self SqlArg) IsValid() bool {
+func Named(name string, value interface{}) NamedArg {
+	return NamedArg{Name: name, Value: value}
+}
+
+func (self NamedArg) IsValid() bool {
 	return columnNameRegexp.MatchString(self.Name)
 }
 
 var columnNameRegexp = regexp.MustCompile(`^(?:\w+(?:\.\w+)*|"\w+(?:\.\w+)*")$`)
 
-func (self SqlArg) IsNil() bool {
+func (self NamedArg) IsNil() bool {
 	return refut.IsNil(self.Value)
 }

@@ -39,9 +39,20 @@ An API for scanning rows one-by-one, like `database/sql.Rows.Scan()` but for str
 
 ## Changelog
 
+### 0.1.2
+
+Breaking changes in named args utils for symmetry with `database/sql`.
+
+* Added `Named()`.
+* Renamed `SqlArg -> NamedArg`.
+* Renamed `SqlArgs -> NamedArgs`.
+* Renamed `StructSqlArgs -> StructNamedArgs`.
+
+Also moved some reflection-related utils to a [tiny dependency](https://github.com/mitranim/refut).
+
 ### 0.1.1
 
-First tagged release. Adds `SqlArgs` and `SqlQuery` for query building.
+First tagged release. Added `SqlArgs` and `SqlQuery` for query building.
 
 ## Contributing
 
