@@ -79,7 +79,15 @@ func (self NamedArgs) Values() []interface{} {
 /*
 Returns comma-separated argument names, suitable for a `select` clause. Example:
 
-	args := gos.NamedArgs{gos.Named("one", 10), gos.Named("two", 20)}
+	val := struct {
+		One int64 `db:"one"`
+		Two int64 `db:"two"`
+	}{
+		One: 10,
+		Two: 20,
+	}
+
+	args := gos.StructNamedArgs(val)
 
 	fmt.Sprintf(`select %v`, args.NamesString())
 
@@ -101,7 +109,15 @@ func (self NamedArgs) NamesString() string {
 Returns parameter placeholders in the Postgres style `$N`, comma-separated,
 suitable for a `values` clause. Example:
 
-	args := gos.NamedArgs{gos.Named("one", 10), gos.Named("two", 20)}
+	val := struct {
+		One int64 `db:"one"`
+		Two int64 `db:"two"`
+	}{
+		One: 10,
+		Two: 20,
+	}
+
+	args := gos.StructNamedArgs(val)
 
 	fmt.Sprintf(`values (%v)`, args.ValuesString())
 
@@ -124,7 +140,15 @@ func (self NamedArgs) ValuesString() string {
 /*
 Returns the string of names and values suitable for an `insert` clause. Example:
 
-	args := gos.NamedArgs{gos.Named("one", 10), gos.Named("two", 20)}
+	val := struct {
+		One int64 `db:"one"`
+		Two int64 `db:"two"`
+	}{
+		One: 10,
+		Two: 20,
+	}
+
+	args := gos.StructNamedArgs(val)
 
 	fmt.Sprintf(`insert into some_table %v`, args.NamesAndValuesString())
 
@@ -141,7 +165,15 @@ func (self NamedArgs) NamesAndValuesString() string {
 /*
 Returns the string of assignments suitable for an `update set` clause. Example:
 
-	args := gos.NamedArgs{gos.Named("one", 10), gos.Named("two", 20)}
+	val := struct {
+		One int64 `db:"one"`
+		Two int64 `db:"two"`
+	}{
+		One: 10,
+		Two: 20,
+	}
+
+	args := gos.StructNamedArgs(val)
 
 	fmt.Sprintf(`update some_table set %v`, args.AssignmentsString())
 
@@ -165,7 +197,15 @@ func (self NamedArgs) AssignmentsString() string {
 Returns the string of conditions suitable for a `where` or `join` clause.
 Example:
 
-	args := gos.NamedArgs{gos.Named("one", 10), gos.Named("two", 20)}
+	val := struct {
+		One int64 `db:"one"`
+		Two int64 `db:"two"`
+	}{
+		One: 10,
+		Two: 20,
+	}
+
+	args := gos.StructNamedArgs(val)
 
 	fmt.Sprintf(`select * from some_table where %v`, args.ConditionsString())
 

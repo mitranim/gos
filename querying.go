@@ -19,7 +19,8 @@ them into a struct type:
 	* Struct slice.
 	* Struct slice pointer.
 
-Nil slices and pointers are fine. Any other input causes a panic.
+Nil slices and pointers are fine, as long as they carry a struct type. Any other
+input causes a panic.
 
 Should be used in conjunction with `Query()`.
 */
