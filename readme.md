@@ -68,7 +68,7 @@ Tests currently require a local instance of Postgres on the default port. They c
 
 ## License
 
-https://en.wikipedia.org/wiki/WTFPL
+https://unlicense.org
 
 ## Misc
 
