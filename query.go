@@ -136,6 +136,35 @@ func (self *SqlQuery) AppendNamed(chunk string, namedArgs map[string]interface{}
 var namedParamRegexp = regexp.MustCompile(`:?:\w+\b`)
 
 /*
+Replaces the given string pattern inside the query.
+
+TODO: panic if no occurrences of the pattern were found, and add a method called
+`MaybeStringReplace` which allows 0 to N matches.
+
+Example:
+
+	var query SqlQuery
+	query.Append(`select {{SELECT}} from some_table`)
+	query.StringReplace(`{{SELECT}}`, `"id", "name"`)
+
+Resulting state:
+
+	SqlQuery{Text: `select "id", "name" from some_table`}
+
+*/
+func (self *SqlQuery) StringReplace(pattern string, chunk string) {
+	self.Text = strings.ReplaceAll(self.Text, pattern, chunk)
+}
+
+/*
+Appends the other query's content and arguments to the end of this query while
+renumerating the positional parameters as appropriate.
+*/
+func (self *SqlQuery) QueryAppend(query SqlQuery) {
+	self.Append(query.Text, query.Args...)
+}
+
+/*
 Interpolates the other query inside itself, replacing every occurrence of the
 given pattern. Renumerates positional parameters and appends the other query's
 args to its own args.
@@ -164,27 +193,6 @@ func (self *SqlQuery) QueryReplace(pattern string, other SqlQuery) {
 	chunk := sqlRenumerateOrdinalParams(other.Text, len(self.Args))
 	self.Text = strings.ReplaceAll(self.Text, pattern, chunk)
 	self.Args = append(self.Args, other.Args...)
-}
-
-/*
-Replaces the given string pattern inside the query.
-
-TODO: panic if no occurrences of the pattern were found, and add a method called
-`MaybeStringReplace` which allows 0 to N matches.
-
-Example:
-
-	var query SqlQuery
-	query.Append(`select {{SELECT}} from some_table`)
-	query.StringReplace(`{{SELECT}}`, `"id", "name"`)
-
-Resulting state:
-
-	SqlQuery{Text: `select "id", "name" from some_table`}
-
-*/
-func (self *SqlQuery) StringReplace(pattern string, chunk string) {
-	self.Text = strings.ReplaceAll(self.Text, pattern, chunk)
 }
 
 /*
