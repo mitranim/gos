@@ -39,6 +39,10 @@ An API for scanning rows one-by-one, like `database/sql.Rows.Scan()` but for str
 
 ## Changelog
 
+### 0.1.5
+
+Fixed an oversight in `queryStruct` and `queryScalar` that could lead to shadowing DB errors with `ErrNoRows` in some edge cases.
+
 ### 0.1.4
 
 Added `SqlQuery.QueryAppend`.

@@ -131,6 +131,10 @@ func queryStruct(ctx context.Context, conn Queryer, rval reflect.Value, query st
 	}
 
 	if !rows.Next() {
+		err := rows.Err()
+		if err != nil {
+			return Err{While: `preparing row`, Cause: err}
+		}
 		return ErrNoRows.while(`preparing row`)
 	}
 
@@ -205,6 +209,10 @@ func queryScalar(ctx context.Context, conn Queryer, dest interface{}, query stri
 	defer rows.Close()
 
 	if !rows.Next() {
+		err := rows.Err()
+		if err != nil {
+			return Err{While: `preparing row`, Cause: err}
+		}
 		return ErrNoRows.while(`preparing row`)
 	}
 
