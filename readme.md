@@ -37,6 +37,10 @@ An API for scanning rows one-by-one, like `database/sql.Rows.Scan()` but for str
 
 ## Changelog
 
+### 0.1.7
+
+Dependency update.
+
 ### 0.1.6
 
 Breaking: moved query generation utils into https://godoc.org/github.com/mitranim/sqlb.
