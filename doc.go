@@ -1,7 +1,10 @@
 /*
 Go SQL, tool for generating SQL queries and decoding results into Go structs.
-NOT AN ORM, and should be used instead of an ORM. Expressly designed to help you
-WRITE PLAIN SQL.
+NOT AN ORM, and should be used instead of an ORM, in combination with a simple
+query builder (see below)
+
+See the sibling library https://godoc.org/github.com/mitranim/sqlb: a simple
+query builder that supports scanning structs into named arguments.
 
 Key Features
 
@@ -10,10 +13,6 @@ Key Features
 • Supports nested records/structs.
 
 • Supports nilable nested records/structs in outer joins.
-
-• Supports generating named SQL arguments from structs. See `StructNamedArgs()`.
-
-• Query builder oriented towards plain SQL. (No DSL in Go.) See `SqlQuery`.
 
 Struct Decoding Rules
 
@@ -103,10 +102,6 @@ DB will optimize them out of the query.
 • Explicit field-column mapping, no hidden renaming.
 
 • Has only one tiny dependency (most deps in `go.mod` are test-only).
-
-• Can convert structs into named SQL arguments.
-
-• Has a simple query builder.
 
 • ... probably more
 

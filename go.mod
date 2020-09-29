@@ -2,9 +2,15 @@ module github.com/mitranim/gos
 
 go 1.13
 
-// Most dependencies are test-only.
+// Actual dependencies.
+require (
+	github.com/mitranim/refut v0.1.2
+)
+
+// Test-only dependencies.
 require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/lib/pq v1.3.0
-	github.com/mitranim/refut v0.1.2
+	github.com/pkg/errors v0.9.1
+	github.com/mitranim/sqlb v0.1.0
 )

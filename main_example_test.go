@@ -6,31 +6,8 @@ import (
 	"fmt"
 
 	"github.com/mitranim/gos"
+	"github.com/mitranim/sqlb"
 )
-
-func ExampleCols() {
-	type Internal struct {
-		Id   string `db:"id"`
-		Name string `db:"name"`
-	}
-
-	type External struct {
-		Id       string   `db:"id"`
-		Name     string   `db:"name"`
-		Internal Internal `db:"internal"`
-	}
-
-	fmt.Println(gos.Cols(External{}))
-
-	/**
-	Formatted here for readability:
-
-	"id",
-	"name",
-	("internal")."id"   as "internal.id",
-	("internal")."name" as "internal.name"
-	*/
-}
 
 func ExampleQuery() {
 	type Internal struct {
@@ -57,7 +34,7 @@ select %v from (
 		external
 		cross join internal
 ) as _
-`, gos.Cols(result))
+`, sqlb.Cols(result))
 
 	/**
 	Resulting query (formatted here for readability):

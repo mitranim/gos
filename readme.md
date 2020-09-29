@@ -2,17 +2,17 @@
 
 **Go** ↔︎ **S**QL: tool for generating SQL queries and decoding results into Go structs.
 
-**Not an ORM**, and should be used **instead** of an ORM. Expressly designed to let you **write plain SQL**.
+**Not an ORM**, and should be used **instead** of an ORM, in combination with a simple query builder (see below).
 
 Key features:
 
 * Decodes SQL records into Go structs.
 * Supports nested records/structs.
 * Supports nilable nested records/structs in outer joins.
-* Supports generating named SQL arguments from structs.
-* Query builder oriented towards plain SQL. (No DSL in Go.)
 
 See the full documentation at https://godoc.org/github.com/mitranim/gos.
+
+See the sibling library https://godoc.org/github.com/mitranim/sqlb: a simple query builder that supports scanning structs into named arguments.
 
 ## Differences from [jmoiron/sqlx](https://github.com/jmoiron/sqlx)
 
@@ -23,8 +23,6 @@ Gos is somewhat similar to [jmoiron/sqlx](https://github.com/jmoiron/sqlx). Key 
 * Simpler API, does not wrap `database/sql`.
 * Explicit field-column mapping, no hidden renaming.
 * Has only one tiny dependency (most deps in `go.mod` are test-only).
-* Can convert structs into named SQL arguments.
-* Has a simple query builder.
 * ... probably more
 
 ## Features Under Consideration
@@ -38,6 +36,10 @@ Like many similar libraries, when selecting fields for nested records, Gos relie
 An API for scanning rows one-by-one, like `database/sql.Rows.Scan()` but for structs. This would allow streaming and might be useful when processing a very large amount of rows. Scanning into structs involves reflecting on the type and generating a spec, and this must be done only once; the API would have to be designed to make it seamless for the user. One option is to wrap `sql.Rows` into an object that provides `.Next()` and `.Scan()`, generates the output spec on the first call to `.Scan()` and stores it, and on subsequent calls ensures that the same destination type was provided.
 
 ## Changelog
+
+### 0.1.6
+
+Breaking: moved query generation utils into https://godoc.org/github.com/mitranim/sqlb.
 
 ### 0.1.5
 

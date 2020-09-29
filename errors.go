@@ -7,8 +7,8 @@ import (
 )
 
 /*
-Describes the specific error type. You probably shouldn't use this directly;
-instead, use the `Err` variables with `errors.Is`.
+Error codes. You probably shouldn't use this directly; instead, use the `Err`
+variables with `errors.Is`.
 */
 type ErrCode string
 

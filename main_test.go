@@ -14,6 +14,7 @@ import (
 	"unsafe"
 
 	_ "github.com/lib/pq"
+	"github.com/mitranim/sqlb"
 )
 
 const testDbName = `gos_test_db`
@@ -799,7 +800,7 @@ func TestCols(t *testing.T) {
 		Nested *Nested `db:"nested"`
 	}
 
-	actual := Cols(Nesting{})
+	actual := sqlb.Cols(Nesting{})
 	expected := `"val", ("nested")."val" as "nested.val"`
 	if expected != actual {
 		t.Fatalf(`expected Cols() to produce %q, got %q`, expected, actual)
@@ -837,7 +838,7 @@ func testInit(t *testing.T) (context.Context, *sql.Tx) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	tx, err := testDb.Begin()
+	tx, err := testDb.BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatalf("failed to start DB transaction: %+v", err)
 	}

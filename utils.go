@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"reflect"
-	"regexp"
-	"strconv"
 	"time"
 	"unsafe"
 
@@ -49,9 +47,12 @@ func isNonNilPointer(rval reflect.Value) bool {
 	return rval.IsValid() && rval.Kind() == reflect.Ptr && !rval.IsNil()
 }
 
-func copyIntSlice(vals []int) []int {
-	out := make([]int, len(vals), len(vals))
-	copy(out, vals)
+func copyIntSlice(src []int) []int {
+	if src == nil {
+		return nil
+	}
+	out := make([]int, len(src), len(src))
+	copy(out, src)
 	return out
 }
 
@@ -64,115 +65,6 @@ func isNilableOrHasNilableNonRootAncestor(fieldSpec *tFieldSpec) bool {
 	}
 	return false
 }
-
-func structRtypeSqlIdents(rtype reflect.Type) []sqlIdent {
-	var idents []sqlIdent
-
-	err := refut.TraverseStructRtype(rtype, func(sfield reflect.StructField, _ []int) error {
-		colName := sfieldColumnName(sfield)
-		if colName == "" {
-			return nil
-		}
-
-		fieldRtype := refut.RtypeDeref(sfield.Type)
-		if fieldRtype.Kind() == reflect.Struct && !isScannableRtype(fieldRtype) {
-			idents = append(idents, sqlIdent{
-				name:   colName,
-				idents: structRtypeSqlIdents(fieldRtype),
-			})
-			return nil
-		}
-
-		idents = append(idents, sqlIdent{name: colName})
-		return nil
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	return idents
-}
-
-type sqlIdent struct {
-	name   string
-	idents []sqlIdent
-}
-
-func (self sqlIdent) selectString() string {
-	return bytesToMutableString(self.appendSelect(nil, nil))
-}
-
-func (self sqlIdent) appendSelect(buf []byte, path []sqlIdent) []byte {
-	/**
-	If the ident doesn't have a name, it's just a collection of other idents,
-	which are considered to be at the "top level". If the ident has a name, it's
-	considered to "contain" the other idents.
-	*/
-	if len(self.idents) > 0 {
-		if self.name != "" {
-			path = append(path, self)
-		}
-		for _, ident := range self.idents {
-			buf = ident.appendSelect(buf, path)
-		}
-		return buf
-	}
-
-	if self.name == "" {
-		return buf
-	}
-
-	if len(buf) > 0 {
-		buf = append(buf, `, `...)
-	}
-
-	if len(path) == 0 {
-		buf = self.appendAlias(buf, nil)
-	} else {
-		buf = self.appendPath(buf, path)
-		buf = append(buf, ` as `...)
-		buf = self.appendAlias(buf, path)
-	}
-
-	return buf
-}
-
-func (self sqlIdent) appendPath(buf []byte, path []sqlIdent) []byte {
-	for i, ident := range path {
-		if i == 0 {
-			buf = appendDelimited(buf, `("`, ident.name, `")`)
-		} else {
-			buf = appendDelimited(buf, `"`, ident.name, `"`)
-		}
-		buf = append(buf, `.`...)
-	}
-	buf = appendDelimited(buf, `"`, self.name, `"`)
-	return buf
-}
-
-func (self sqlIdent) appendAlias(buf []byte, path []sqlIdent) []byte {
-	buf = append(buf, `"`...)
-	for _, ident := range path {
-		buf = append(buf, ident.name...)
-		buf = append(buf, `.`...)
-	}
-	buf = append(buf, self.name...)
-	buf = append(buf, `"`...)
-	return buf
-}
-
-func appendDelimited(buf []byte, prefix, infix, suffix string) []byte {
-	buf = append(buf, prefix...)
-	buf = append(buf, infix...)
-	buf = append(buf, suffix...)
-	return buf
-}
-
-// Self-reminder about non-free conversions.
-func bytesToStringAlloc(bytes []byte) string { return string(bytes) }
-
-// Self-reminder about non-free conversions.
-func stringToBytesAlloc(input string) []byte { return []byte(input) }
 
 /*
 Allocation-free conversion. Reinterprets a byte slice as a string. Borrowed from
@@ -193,19 +85,9 @@ func sfieldColumnName(sfield reflect.StructField) string {
 }
 
 /*
-Renumerates "$1" param placeholders by adding the given offset.
-
-TODO: better parser that ignores $N inside string literals. The parser should be
-used for both this and `sqlAppendNamed`.
+Truncates the length, keeping the available capacity. The input must be a slice.
+Safe to call on a nil slice.
 */
-func sqlRenumerateOrdinalParams(query string, offset int) string {
-	return postgresPositionalParamRegexp.ReplaceAllStringFunc(query, func(match string) string {
-		num, err := strconv.Atoi(match[1:])
-		if err != nil {
-			panic(err)
-		}
-		return "$" + strconv.Itoa(num+offset)
-	})
+func truncateSliceRval(rval reflect.Value) {
+	rval.SetLen(0)
 }
-
-var postgresPositionalParamRegexp = regexp.MustCompile(`\$\d+\b`)
