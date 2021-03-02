@@ -1,6 +1,6 @@
 ## Overview
 
-**Go** ↔︎ **S**QL: tool for generating SQL queries and decoding results into Go structs.
+**Go** ↔︎ **S**QL: tool for decoding results into Go structs. Supports streaming.
 
 **Not an ORM**, and should be used **instead** of an ORM, in combination with a simple query builder (see below).
 
@@ -9,10 +9,11 @@ Key features:
 * Decodes SQL records into Go structs.
 * Supports nested records/structs.
 * Supports nilable nested records/structs in outer joins.
+* Supports streaming.
 
-See the full documentation at https://godoc.org/github.com/mitranim/gos.
+See the full documentation at https://pkg.go.dev/github.com/mitranim/gos.
 
-See the sibling library https://godoc.org/github.com/mitranim/sqlb: a simple query builder that supports scanning structs into named arguments.
+See the sibling library https://pkg.go.dev/github.com/mitranim/sqlb: a simple query builder that supports scanning structs into named arguments.
 
 ## Differences from [jmoiron/sqlx](https://github.com/jmoiron/sqlx)
 
@@ -31,11 +32,11 @@ Gos is somewhat similar to [jmoiron/sqlx](https://github.com/jmoiron/sqlx). Key 
 
 Like many similar libraries, when selecting fields for nested records, Gos relies on column aliases like `"column_name.column_name"`. With enough nesting, they can become too long. At the time of writing, Postgres 12 has an identifier length limit of 63 and will _silently truncate_ the remainder, causing queries to fail, or worse. One solution is shorter aliases, such as `"1.2.3"` from struct field indexes. We still want to support long alises for manually-written queries, which means the library would have to support _both_ alias types, which could potentially cause collisions. Unclear what's the best approach.
 
-* Streaming API.
-
-An API for scanning rows one-by-one, like `database/sql.Rows.Scan()` but for structs. This would allow streaming and might be useful when processing a very large amount of rows. Scanning into structs involves reflecting on the type and generating a spec, and this must be done only once; the API would have to be designed to make it seamless for the user. One option is to wrap `sql.Rows` into an object that provides `.Next()` and `.Scan()`, generates the output spec on the first call to `.Scan()` and stores it, and on subsequent calls ensures that the same destination type was provided.
-
 ## Changelog
+
+### 0.1.8
+
+Support streaming via `QueryScanner` and `Scanner`.
 
 ### 0.1.7
 
@@ -43,7 +44,7 @@ Dependency update.
 
 ### 0.1.6
 
-Breaking: moved query generation utils into https://godoc.org/github.com/mitranim/sqlb.
+Breaking: moved query generation utils into https://pkg.go.dev/github.com/mitranim/sqlb.
 
 ### 0.1.5
 

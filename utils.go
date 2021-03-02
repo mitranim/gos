@@ -3,9 +3,9 @@ package gos
 import (
 	"context"
 	"database/sql"
+	"io"
 	"reflect"
 	"time"
-	"unsafe"
 
 	"github.com/mitranim/refut"
 )
@@ -26,6 +26,24 @@ type Execer interface {
 	ExecContext(context.Context, string, ...interface{}) (*sql.Result, error)
 }
 
+/*
+Decodes individual SQL rows in a streaming fashion. Returned by `QueryScanner()`.
+*/
+type Scanner interface {
+	// Same as `(*sql.Rows).Close`. MUST be called at the end.
+	io.Closer
+
+	// Same as `(*sql.Rows).Next`.
+	Next() bool
+
+	// Same as `(*sql.Rows).Err`.
+	Err() error
+
+	// Decodes the current row into the output. For technical reasons, the output
+	// type is cached on the first call and must be the same for every call.
+	Scan(interface{}) error
+}
+
 func stringIndex(strs []string, str string) int {
 	for i := range strs {
 		if strs[i] == str {
@@ -38,20 +56,22 @@ func stringIndex(strs []string, str string) int {
 var timeRtype = reflect.TypeOf(time.Time{})
 var sqlScannerRtype = reflect.TypeOf((*sql.Scanner)(nil)).Elem()
 
-func isScannableRtype(rtype reflect.Type) bool {
+func isRtypeScannable(rtype reflect.Type) bool {
 	return rtype != nil &&
 		(rtype == timeRtype || reflect.PtrTo(rtype).Implements(sqlScannerRtype))
 }
 
-func isNonNilPointer(rval reflect.Value) bool {
-	return rval.IsValid() && rval.Kind() == reflect.Ptr && !rval.IsNil()
+// WTB better name.
+func isRtypeStructNonScannable(rtype reflect.Type) bool {
+	rtype = refut.RtypeDeref(rtype)
+	return rtype != nil && rtype.Kind() == reflect.Struct && !isRtypeScannable(rtype)
 }
 
 func copyIntSlice(src []int) []int {
 	if src == nil {
 		return nil
 	}
-	out := make([]int, len(src), len(src))
+	out := make([]int, len(src))
 	copy(out, src)
 	return out
 }
@@ -64,16 +84,6 @@ func isNilableOrHasNilableNonRootAncestor(fieldSpec *tFieldSpec) bool {
 		fieldSpec = fieldSpec.parentFieldSpec
 	}
 	return false
-}
-
-/*
-Allocation-free conversion. Reinterprets a byte slice as a string. Borrowed from
-the standard library. Reasonably safe. Should not be used when the underlying
-byte array is volatile, for example when it's part of a scratch buffer during
-SQL scanning.
-*/
-func bytesToMutableString(bytes []byte) string {
-	return *(*string)(unsafe.Pointer(&bytes))
 }
 
 /*
@@ -90,4 +100,16 @@ Safe to call on a nil slice.
 */
 func truncateSliceRval(rval reflect.Value) {
 	rval.SetLen(0)
+}
+
+func rtypeDerefKind(rtype reflect.Type) reflect.Kind {
+	rtype = refut.RtypeDeref(rtype)
+	if rtype == nil {
+		return reflect.Invalid
+	}
+	return rtype.Kind()
+}
+
+func rtypeDerefElem(rtype reflect.Type) reflect.Type {
+	return refut.RtypeDeref(rtype).Elem()
 }

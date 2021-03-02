@@ -11,12 +11,44 @@ import (
 )
 
 /*
-Scans columns into the destination, which may be one of:
+Executes an SQL query and prepares a `Scanner` that can decode individual rows
+into structs or scalars. A `Scanner` is used similarly to `*sql.Rows`, but
+automatically maps columns to struct fields. Just like `*sql.Rows`, this avoids
+buffering all results in memory, which is especially useful for large sets.
+
+The returned scanner MUST be closed after finishing.
+
+Example:
+
+	scan, err := QueryScanner(ctx, conn, query, args)
+	panic(err)
+	defer scan.Close()
+
+	for scan.Next() {
+		var result ResultType
+		err := scan.Scan(&result)
+		panic(err)
+	}
+*/
+func QueryScanner(ctx context.Context, conn Queryer, query string, args []interface{}) (Scanner, error) {
+	rows, err := conn.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, Err{While: `querying rows`, Cause: err}
+	}
+	return &scanner{Rows: rows}, nil
+}
+
+/*
+Shortcut for scanning columns into the destination, which may be one of:
 
 	* Single scalar.
 	* Slice of scalars.
 	* Single struct.
 	* Slice of structs.
+
+When the output is a slice, the query should use a small `limit`. When
+processing a large data set, prefer `QueryScanner()` to scan rows one-by-one
+without buffering the result.
 
 If the destination is a non-slice, there must be exactly one row. Less or more
 will result in an error. If the destination is a struct, this will decode
@@ -41,28 +73,24 @@ The query should have:
 		(inner).inner_value as "inner.inner_value"
 
 The easiest way to generate the query correctly is by calling `sqlb.Cols(dest)`,
-using the sibling package https://godoc.org/github.com/mitranim/sqlb.
+using the sibling package "github.com/mitranim/sqlb".
 */
 func Query(ctx context.Context, conn Queryer, dest interface{}, query string, args []interface{}) error {
-	rval := reflect.ValueOf(dest)
-	if !isNonNilPointer(rval) {
-		return ErrInvalidDest.because(fmt.Errorf(`destination must be a non-nil pointer, received %#v`, dest))
+	err := validateDest(dest)
+	if err != nil {
+		return err
 	}
 
-	rtype := refut.RtypeDeref(rval.Type())
-
-	if rtype.Kind() == reflect.Slice {
-		elemRtype := refut.RtypeDeref(rtype.Elem())
-		if elemRtype.Kind() == reflect.Struct && !isScannableRtype(elemRtype) {
-			return queryStructs(ctx, conn, rval, query, args)
-		}
-		return queryScalars(ctx, conn, rval, query, args)
+	scan, err := QueryScanner(ctx, conn, query, args)
+	if err != nil {
+		return err
 	}
+	defer scan.Close()
 
-	if rtype.Kind() == reflect.Struct && !isScannableRtype(rtype) {
-		return queryStruct(ctx, conn, rval, query, args)
+	if rtypeDerefKind(reflect.TypeOf(dest)) == reflect.Slice {
+		return scanMany(dest, scan)
 	}
-	return queryScalar(ctx, conn, dest, query, args)
+	return scanOne(dest, scan)
 }
 
 /* Internal */
@@ -95,154 +123,110 @@ type tDecodeState struct {
 	colPtrs []interface{}
 }
 
-/*
-The destination must be a pointer to a non-scannable struct.
-*/
-func queryStruct(ctx context.Context, conn Queryer, rval reflect.Value, query string, args []interface{}) error {
-	rows, err := conn.QueryContext(ctx, query, args...)
-	if err != nil {
-		return Err{While: `querying rows`, Cause: err}
-	}
-	defer rows.Close()
+func scanMany(dest interface{}, scan Scanner) error {
+	rval := reflect.ValueOf(dest)
+	sliceRval := refut.RvalDerefAlloc(rval)
+	truncateSliceRval(sliceRval)
 
-	spec, err := prepareDestSpec(rows, rval.Type())
-	if err != nil {
-		return err
-	}
+	elemRtype := rtypeDerefElem(rval.Type())
 
-	state, err := prepareDecodeState(rows, spec)
-	if err != nil {
-		return err
+	for scan.Next() {
+		ptrRval := reflect.New(elemRtype)
+
+		err := scan.Scan(ptrRval.Interface())
+		if err != nil {
+			return err
+		}
+
+		sliceRval.Set(reflect.Append(sliceRval, ptrRval.Elem()))
 	}
 
-	if !rows.Next() {
-		err := rows.Err()
+	return nil
+}
+
+func scanOne(dest interface{}, scan Scanner) error {
+	if !scan.Next() {
+		err := scan.Err()
 		if err != nil {
 			return Err{While: `preparing row`, Cause: err}
 		}
 		return ErrNoRows.while(`preparing row`)
 	}
 
-	err = rows.Scan(state.colPtrs...)
-	if err != nil {
-		return Err{While: `scanning row`, Cause: err}
-	}
-
-	err = traverseDecode(rval, spec, state, &spec.typeSpec, nil)
+	err := scan.Scan(dest)
 	if err != nil {
 		return err
 	}
 
-	if rows.Next() {
+	if scan.Next() {
 		return ErrMultipleRows.while(`verifying row count`)
 	}
-
 	return nil
 }
 
-/*
-The destination must be a pointer to a slice of non-scannable structs or
-pointers to those structs.
-*/
-func queryStructs(ctx context.Context, conn Queryer, rval reflect.Value, query string, args []interface{}) error {
-	elemRtype := refut.RtypeDeref(rval.Type()).Elem()
+type scanner struct {
+	*sql.Rows
+	rtype reflect.Type
+	spec  *tDestSpec
+}
 
-	rows, err := conn.QueryContext(ctx, query, args...)
-	if err != nil {
-		return Err{While: `querying rows`, Cause: err}
-	}
-	defer rows.Close()
+func (self *scanner) Scan(dest interface{}) error {
+	rval := reflect.ValueOf(dest)
 
-	spec, err := prepareDestSpec(rows, reflect.PtrTo(elemRtype))
+	err := validateDest(dest)
 	if err != nil {
 		return err
 	}
 
-	sliceRval := refut.RvalDerefAlloc(rval)
-	truncateSliceRval(sliceRval)
+	rtype := rval.Type()
 
-	for rows.Next() {
-		state, err := prepareDecodeState(rows, spec)
+	if self.rtype == nil {
+		self.rtype = rtype
+	} else {
+		err := validateMatchingDestType(self.rtype, rtype)
 		if err != nil {
 			return err
 		}
+	}
 
-		err = rows.Scan(state.colPtrs...)
-		if err != nil {
-			return Err{While: `scanning row`, Cause: err}
-		}
+	if isRtypeStructNonScannable(rtype) {
+		return self.scanStruct(rval)
+	}
+	return self.scanScalar(dest)
+}
 
-		elemPtrRval := reflect.New(elemRtype)
-
-		err = traverseDecode(elemPtrRval, spec, state, &spec.typeSpec, nil)
+func (self *scanner) scanStruct(rval reflect.Value) error {
+	if self.spec == nil {
+		spec, err := prepareDestSpec(self.Rows, self.rtype)
 		if err != nil {
 			return err
 		}
-
-		sliceRval.Set(reflect.Append(sliceRval, elemPtrRval.Elem()))
+		self.spec = spec
 	}
 
-	return nil
+	state, err := prepareDecodeState(self.Rows, self.spec)
+	if err != nil {
+		return err
+	}
+
+	err = self.Rows.Scan(state.colPtrs...)
+	if err != nil {
+		return ErrScan.because(err)
+	}
+
+	return traverseDecode(rval, self.spec, state, &self.spec.typeSpec, nil)
 }
 
-func queryScalar(ctx context.Context, conn Queryer, dest interface{}, query string, args []interface{}) error {
-	rows, err := conn.QueryContext(ctx, query, args...)
+func (self *scanner) scanScalar(dest interface{}) error {
+	err := self.Rows.Scan(dest)
 	if err != nil {
-		return Err{While: `querying rows`, Cause: err}
+		return ErrScan.because(err)
 	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		err := rows.Err()
-		if err != nil {
-			return Err{While: `preparing row`, Cause: err}
-		}
-		return ErrNoRows.while(`preparing row`)
-	}
-
-	err = rows.Scan(dest)
-	if err != nil {
-		return Err{While: `scanning row`, Cause: err}
-	}
-
-	if rows.Next() {
-		return ErrMultipleRows.while(`verifying row count`)
-	}
-
-	return nil
-}
-
-/*
-The destination must be a pointer to a slice of scannables or primitives.
-*/
-func queryScalars(ctx context.Context, conn Queryer, rval reflect.Value, query string, args []interface{}) error {
-	elemRtype := refut.RtypeDeref(rval.Type()).Elem()
-
-	rows, err := conn.QueryContext(ctx, query, args...)
-	if err != nil {
-		return Err{While: `querying rows`, Cause: err}
-	}
-	defer rows.Close()
-
-	sliceRval := refut.RvalDerefAlloc(rval)
-	truncateSliceRval(sliceRval)
-
-	for rows.Next() {
-		elemPtrRval := reflect.New(elemRtype)
-
-		err = rows.Scan(elemPtrRval.Interface())
-		if err != nil {
-			return Err{While: `scanning row`, Cause: err}
-		}
-
-		sliceRval.Set(reflect.Append(sliceRval, elemPtrRval.Elem()))
-	}
-
 	return nil
 }
 
 func prepareDestSpec(rows *sql.Rows, rtype reflect.Type) (*tDestSpec, error) {
-	if rtype == nil || rtype.Kind() != reflect.Ptr || refut.RtypeDeref(rtype).Kind() != reflect.Struct {
+	if rtype == nil || rtype.Kind() != reflect.Ptr || rtypeDerefKind(rtype) != reflect.Struct {
 		return nil, Err{
 			Code:  ErrCodeInvalidDest,
 			While: `preparing destination spec`,
@@ -348,7 +332,7 @@ func traverseMakeSpec(
 		}
 		spec.colRtypes[fieldSpec.uniqColAlias] = sfield.Type
 
-		if fieldRtype.Kind() == reflect.Struct && !isScannableRtype(fieldRtype) {
+		if isRtypeStructNonScannable(fieldRtype) {
 			err := traverseMakeSpec(spec, &fieldSpec.typeSpec, fieldSpec, colPath, fieldPath)
 			if err != nil {
 				return err
@@ -385,7 +369,7 @@ func traverseDecode(
 			continue
 		}
 
-		if fieldRtype.Kind() == reflect.Struct && !isScannableRtype(fieldRtype) {
+		if isRtypeStructNonScannable(fieldRtype) {
 			err := traverseDecode(rootRval, spec, state, &fieldSpec.typeSpec, fieldSpec)
 			if err != nil {
 				return err
@@ -443,5 +427,20 @@ func traverseDecode(
 		fieldRval.Set(colRval.Elem())
 	}
 
+	return nil
+}
+
+func validateDest(dest interface{}) error {
+	rval := reflect.ValueOf(dest)
+	if rval.IsValid() && rval.Kind() == reflect.Ptr && !rval.IsNil() {
+		return nil
+	}
+	return ErrInvalidDest.because(fmt.Errorf(`destination must be a non-nil pointer, received %#v`, dest))
+}
+
+func validateMatchingDestType(expected, found reflect.Type) error {
+	if expected != found {
+		return ErrInvalidDest.because(fmt.Errorf(`destination must be of type %v, received %v`, expected, found))
+	}
 	return nil
 }

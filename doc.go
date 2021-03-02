@@ -1,10 +1,11 @@
 /*
-Go SQL, tool for generating SQL queries and decoding results into Go structs.
-NOT AN ORM, and should be used instead of an ORM, in combination with a simple
-query builder (see below)
+Go SQL, tool for decoding results into Go structs. Supports streaming.
 
-See the sibling library https://godoc.org/github.com/mitranim/sqlb: a simple
-query builder that supports scanning structs into named arguments.
+NOT AN ORM, and should be used instead of an ORM, in combination with a simple
+query builder (see below).
+
+See the sibling library "github.com/mitranim/sqlb": a simple query builder that
+supports converting structs into named arguments.
 
 Key Features
 
@@ -13,6 +14,8 @@ Key Features
 • Supports nested records/structs.
 
 • Supports nilable nested records/structs in outer joins.
+
+• Supports streaming. See `QueryScanner()`.
 
 Struct Decoding Rules
 

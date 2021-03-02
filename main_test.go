@@ -48,7 +48,7 @@ func runTestMain(m *testing.M) int {
 	instances of this test would conflict; we could create databases with random
 	names to allow multiple instances of the test; seems unnecessary.
 	*/
-	_ = dropDb(connParams, testDbName)
+	dropDb(connParams, testDbName)
 	err = createDb(connParams, testDbName)
 	if err != nil {
 		panic(err)
@@ -166,7 +166,7 @@ func TestScalarsNullable(t *testing.T) {
 		t.Fatalf("%+v", err)
 	}
 
-	expected := []*string{strptr("one"), nil, strptr("three")}
+	expected := []*string{strPtr("one"), nil, strPtr("three")}
 	if !reflect.DeepEqual(expected, results) {
 		t.Fatalf(`expected %#v, got %#v`, expected, results)
 	}
@@ -473,7 +473,7 @@ func TestStructMissingColDest(t *testing.T) {
 	}
 
 	{
-		query := `select 'one' as one, null as two`
+		query := `select 'one' as one, null::text as two`
 		err := Query(ctx, tx, &result, query, nil)
 		if !errors.Is(err, ErrNoColDest) {
 			t.Fatalf(`expected error ErrNoColDest, got %+v`, err)
@@ -589,7 +589,7 @@ func TestStructNestedNotNullNilableField(t *testing.T) {
 		t.Fatalf("%+v", err)
 	}
 
-	expected := Nesting{Val: "one", Nested: Nested{Val: strptr("two")}}
+	expected := Nesting{Val: "one", Nested: Nested{Val: strPtr("two")}}
 	if !reflect.DeepEqual(expected, result) {
 		t.Fatalf(`expected %#v, got %#v`, expected, result)
 	}
@@ -617,7 +617,7 @@ func TestStructNestedNotNullNilableBoth(t *testing.T) {
 		t.Fatalf("%+v", err)
 	}
 
-	expected := Nesting{Val: "one", Nested: &Nested{Val: strptr("two")}}
+	expected := Nesting{Val: "one", Nested: &Nested{Val: strPtr("two")}}
 	if !reflect.DeepEqual(expected, result) {
 		t.Fatalf(`expected %#v, got %#v`, expected, result)
 	}
@@ -757,7 +757,7 @@ func TestStructNestedPartiallyNull(t *testing.T) {
 		t.Fatalf("%+v", err)
 	}
 
-	expected := Nesting{Nested: &Nested{One: strptr("one")}, Three: "three"}
+	expected := Nesting{Nested: &Nested{One: strPtr("one")}, Three: "three"}
 	if !reflect.DeepEqual(expected, result) {
 		t.Fatalf(`expected %#v, got %#v`, expected, result)
 	}
@@ -777,14 +777,14 @@ func TestStructMissingColSrc(t *testing.T) {
 		Four  *Result
 	}
 
-	result := Result{Two: "two", Three: strptr("three"), Four: &Result{One: "four"}}
+	result := Result{Two: "two", Three: strPtr("three"), Four: &Result{One: "four"}}
 	query := `select 'one' as one`
 	err := Query(ctx, tx, &result, query, nil)
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
 
-	expected := Result{One: "one", Two: "two", Three: strptr("three"), Four: &Result{One: "four"}}
+	expected := Result{One: "one", Two: "two", Three: strPtr("three"), Four: &Result{One: "four"}}
 	if !reflect.DeepEqual(expected, result) {
 		t.Fatalf(`expected %#v, got %#v`, expected, result)
 	}
@@ -814,11 +814,14 @@ func createDb(connParams []string, dbName string) error {
 	})
 }
 
-func dropDb(connParams []string, dbName string) error {
-	return withPostgresDb(connParams, func(db *sql.DB) error {
+func dropDb(connParams []string, dbName string) {
+	err := withPostgresDb(connParams, func(db *sql.DB) error {
 		_, err := db.Exec(`drop database if exists ` + dbName)
 		return err
 	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 func withPostgresDb(connParams []string, fun func(db *sql.DB) error) error {
@@ -859,7 +862,7 @@ func (self *ScannableString) Scan(input interface{}) error {
 	return nil
 }
 
-func strptr(str string) *string { return &str }
+func strPtr(str string) *string { return &str }
 
 func timeMustParse(str string) time.Time {
 	out, err := time.Parse(time.RFC3339, str)

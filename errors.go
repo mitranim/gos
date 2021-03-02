@@ -43,7 +43,7 @@ var (
 	ErrNoColDest    Err = Err{Code: ErrCodeNoColDest, Cause: errors.New(`column has no matching destination`)}
 	ErrRedundantCol Err = Err{Code: ErrCodeRedundantCol, Cause: errors.New(`redundant column occurrence`)}
 	ErrNull         Err = Err{Code: ErrCodeNull, Cause: errors.New(`null column for non-nilable field`)}
-	ErrScan         Err = Err{Code: ErrCodeScan, Cause: errors.New(`error while scanning into field`)}
+	ErrScan         Err = Err{Code: ErrCodeScan, Cause: errors.New(`error while scanning row`)}
 )
 
 // Describes a Gos error.
