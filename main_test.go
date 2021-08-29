@@ -71,10 +71,7 @@ func TestScalarBasic(t *testing.T) {
 
 	var result string
 	query := `select 'blah'`
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	expected := "blah"
 	if expected != result {
@@ -103,10 +100,7 @@ func TestScalarNullable(t *testing.T) {
 
 	var result *string
 	query := `select 'blah'`
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	expected := "blah"
 	if expected != *result {
@@ -114,10 +108,7 @@ func TestScalarNullable(t *testing.T) {
 	}
 
 	query = `select null`
-	err = Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	if result != nil {
 		t.Fatalf(`expected selecting null to produce nil, got %q`, *result)
@@ -129,15 +120,10 @@ func TestScalarsBasic(t *testing.T) {
 
 	var results []string
 	query := `select * from (values ('one'), ('two'), ('three')) as _`
-	err := Query(ctx, tx, &results, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &results, query, nil))
 
 	expected := []string{"one", "two", "three"}
-	if !reflect.DeepEqual(expected, results) {
-		t.Fatalf(`expected %#v, got %#v`, expected, results)
-	}
+	eq(t, expected, results)
 }
 
 func TestScalarsNonNullable(t *testing.T) {
@@ -161,15 +147,10 @@ func TestScalarsNullable(t *testing.T) {
 
 	var results []*string
 	query := `select * from (values ('one'), (null), ('three')) as _`
-	err := Query(ctx, tx, &results, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &results, query, nil))
 
 	expected := []*string{strPtr("one"), nil, strPtr("three")}
-	if !reflect.DeepEqual(expected, results) {
-		t.Fatalf(`expected %#v, got %#v`, expected, results)
-	}
+	eq(t, expected, results)
 }
 
 // Verify that we treat `time.Time` as an atomic scannable rather than a struct.
@@ -178,10 +159,7 @@ func TestScalarTime(t *testing.T) {
 
 	var result time.Time
 	query := `select '0001-01-01'::timestamp`
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	expected := timeMustParse(`0001-01-01T00:00:00Z`)
 	if expected.UnixNano() != result.UnixNano() {
@@ -195,10 +173,7 @@ func TestScalarsTime(t *testing.T) {
 
 	var results []time.Time
 	query := `select * from (values ('0001-01-01'::timestamp), ('0002-01-01'::timestamp)) as _`
-	err := Query(ctx, tx, &results, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &results, query, nil))
 
 	expected := []int64{
 		timeMustParse(`0001-01-01T00:00:00Z`).UnixNano(),
@@ -210,9 +185,7 @@ func TestScalarsTime(t *testing.T) {
 		results[1].UnixNano(),
 	}
 
-	if !reflect.DeepEqual(expected, received) {
-		t.Fatalf(`expected %#v, got %#v`, expected, received)
-	}
+	eq(t, expected, received)
 }
 
 func TestScalarScannable(t *testing.T) {
@@ -220,10 +193,7 @@ func TestScalarScannable(t *testing.T) {
 
 	var result ScannableString
 	query := `select 'blah'`
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	expected := "blah_scanned"
 	received := string(result)
@@ -237,16 +207,31 @@ func TestScalarsScannable(t *testing.T) {
 
 	var results []ScannableString
 	query := `select * from (values ('one'), ('two'), ('three')) as _`
-	err := Query(ctx, tx, &results, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &results, query, nil))
 
 	expected := []string{"one_scanned", "two_scanned", "three_scanned"}
 	received := *(*[]string)(unsafe.Pointer(&results))
-	if !reflect.DeepEqual(expected, received) {
-		t.Fatalf(`expected %#v, got %#v`, expected, received)
+	eq(t, expected, received)
+}
+
+/*
+Verifies that when the output is a slice and the result set is empty, we
+truncate the slice to empty, while retaining its nil or non-nil status, without
+forcing it to become nil or non-nil. This allows users to define their own
+empty semantics.
+*/
+func TestScalarsEmpty(t *testing.T) {
+	ctx, tx := testInit(t)
+
+	test := func(exp, res []string) {
+		query := `select 'blah' where false`
+		try(t, Query(ctx, tx, &res, query, nil))
+		eq(t, exp, res)
 	}
+
+	test([]string(nil), []string(nil))
+	test([]string{}, []string{})
+	test([]string{}, []string{"blah"})
 }
 
 func TestStructScannable(t *testing.T) {
@@ -254,10 +239,7 @@ func TestStructScannable(t *testing.T) {
 
 	var result ScannableStruct
 	query := `select 'blah'`
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	expected := ScannableStruct{Value: "blah_scanned"}
 	if expected != result {
@@ -270,15 +252,10 @@ func TestStructsScannable(t *testing.T) {
 
 	var results []ScannableStruct
 	query := `select * from (values ('one'), ('two'), ('three')) as _`
-	err := Query(ctx, tx, &results, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &results, query, nil))
 
 	expected := []ScannableStruct{{"one_scanned"}, {"two_scanned"}, {"three_scanned"}}
-	if !reflect.DeepEqual(expected, results) {
-		t.Fatalf(`expected %#v, got %#v`, expected, results)
-	}
+	eq(t, expected, results)
 }
 
 func TestStructWithBasicTypes(t *testing.T) {
@@ -307,10 +284,7 @@ func TestStructWithBasicTypes(t *testing.T) {
 		'scan'            :: text      as scan
 	`
 
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	tFieldEq(t, "Int32", result.Int32, int32(1))
 	tFieldEq(t, "Int64", result.Int64, int64(2))
@@ -352,10 +326,7 @@ func TestStructFieldNaming(t *testing.T) {
 		'three' as seven
 	`
 
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	tFieldEq(t, "One", result.One, "one")
 	tFieldEq(t, "Two", *result.Two, "two")
@@ -425,10 +396,7 @@ func TestStructFieldNullability(t *testing.T) {
 		null  as nilable
 	`
 
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	expected := Result{NonNilable: "one", Nilable: nil}
 	if expected != result {
@@ -446,15 +414,10 @@ func TestStructs(t *testing.T) {
 
 	var results []Result
 	query := `select * from (values ('one', 10), ('two', 20)) as vals (one, two)`
-	err := Query(ctx, tx, &results, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &results, query, nil))
 
 	expected := []Result{{"one", 10}, {"two", 20}}
-	if !reflect.DeepEqual(expected, results) {
-		t.Fatalf(`expected %#v, got %#v`, expected, results)
-	}
+	eq(t, expected, results)
 }
 
 func TestStructMissingColDest(t *testing.T) {
@@ -486,14 +449,10 @@ func TestScalarsEmptyResult(t *testing.T) {
 
 	results := []string{"one", "two", "three"}
 	query := `select where false`
-	err := Query(ctx, tx, &results, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &results, query, nil))
+
 	expected := []string{}
-	if !reflect.DeepEqual(expected, results) {
-		t.Fatalf(`expected %#v, got %#v`, expected, results)
-	}
+	eq(t, expected, results)
 }
 
 func TestStructsEmptyResult(t *testing.T) {
@@ -501,14 +460,10 @@ func TestStructsEmptyResult(t *testing.T) {
 
 	results := []struct{}{{}, {}, {}}
 	query := `select where false`
-	err := Query(ctx, tx, &results, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &results, query, nil))
+
 	expected := []struct{}{}
-	if !reflect.DeepEqual(expected, results) {
-		t.Fatalf(`expected %#v, got %#v`, expected, results)
-	}
+	eq(t, expected, results)
 }
 
 func TestStructNestedNotNullNotNilable(t *testing.T) {
@@ -528,15 +483,10 @@ func TestStructNestedNotNullNotNilable(t *testing.T) {
 		'one' as "val",
 		'two' as "nested.val"
 	`
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	expected := Nesting{Val: "one", Nested: Nested{Val: "two"}}
-	if !reflect.DeepEqual(expected, result) {
-		t.Fatalf(`expected %#v, got %#v`, expected, result)
-	}
+	eq(t, expected, result)
 }
 
 func TestStructNestedNotNullNilableStruct(t *testing.T) {
@@ -556,15 +506,10 @@ func TestStructNestedNotNullNilableStruct(t *testing.T) {
 		'one' as "val",
 		'two' as "nested.val"
 	`
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	expected := Nesting{Val: "one", Nested: &Nested{Val: "two"}}
-	if !reflect.DeepEqual(expected, result) {
-		t.Fatalf(`expected %#v, got %#v`, expected, result)
-	}
+	eq(t, expected, result)
 }
 
 func TestStructNestedNotNullNilableField(t *testing.T) {
@@ -584,15 +529,10 @@ func TestStructNestedNotNullNilableField(t *testing.T) {
 		'one' as "val",
 		'two' as "nested.val"
 	`
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	expected := Nesting{Val: "one", Nested: Nested{Val: strPtr("two")}}
-	if !reflect.DeepEqual(expected, result) {
-		t.Fatalf(`expected %#v, got %#v`, expected, result)
-	}
+	eq(t, expected, result)
 }
 
 func TestStructNestedNotNullNilableBoth(t *testing.T) {
@@ -612,15 +552,10 @@ func TestStructNestedNotNullNilableBoth(t *testing.T) {
 		'one' as "val",
 		'two' as "nested.val"
 	`
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	expected := Nesting{Val: "one", Nested: &Nested{Val: strPtr("two")}}
-	if !reflect.DeepEqual(expected, result) {
-		t.Fatalf(`expected %#v, got %#v`, expected, result)
-	}
+	eq(t, expected, result)
 }
 
 func TestStructNestedNullNotNilable(t *testing.T) {
@@ -665,15 +600,10 @@ func TestStructNestedNullNilableStruct(t *testing.T) {
 		'one' as "val",
 		null as "nested.val"
 	`
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	expected := Nesting{Val: "one", Nested: nil}
-	if !reflect.DeepEqual(expected, result) {
-		t.Fatalf(`expected %#v, got %#v`, expected, result)
-	}
+	eq(t, expected, result)
 }
 
 func TestStructNestedNullNilableField(t *testing.T) {
@@ -693,15 +623,10 @@ func TestStructNestedNullNilableField(t *testing.T) {
 		'one' as "val",
 		null as "nested.val"
 	`
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	expected := Nesting{Val: "one", Nested: Nested{Val: nil}}
-	if !reflect.DeepEqual(expected, result) {
-		t.Fatalf(`expected %#v, got %#v`, expected, result)
-	}
+	eq(t, expected, result)
 }
 
 // This also tests for on-demand allocation: if all fields of the inner struct
@@ -723,15 +648,10 @@ func TestStructNestedNullNilableBoth(t *testing.T) {
 		'one' as "val",
 		null as "nested.val"
 	`
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	expected := Nesting{Val: "one", Nested: nil}
-	if !reflect.DeepEqual(expected, result) {
-		t.Fatalf(`expected %#v, got %#v`, expected, result)
-	}
+	eq(t, expected, result)
 }
 
 func TestStructNestedPartiallyNull(t *testing.T) {
@@ -752,15 +672,10 @@ func TestStructNestedPartiallyNull(t *testing.T) {
 		'one'   as "nested.one",
 		'three' as "three"
 	`
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	expected := Nesting{Nested: &Nested{One: strPtr("one")}, Three: "three"}
-	if !reflect.DeepEqual(expected, result) {
-		t.Fatalf(`expected %#v, got %#v`, expected, result)
-	}
+	eq(t, expected, result)
 }
 
 /*
@@ -779,15 +694,10 @@ func TestStructMissingColSrc(t *testing.T) {
 
 	result := Result{Two: "two", Three: strPtr("three"), Four: &Result{One: "four"}}
 	query := `select 'one' as one`
-	err := Query(ctx, tx, &result, query, nil)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	try(t, Query(ctx, tx, &result, query, nil))
 
 	expected := Result{One: "one", Two: "two", Three: strPtr("three"), Four: &Result{One: "four"}}
-	if !reflect.DeepEqual(expected, result) {
-		t.Fatalf(`expected %#v, got %#v`, expected, result)
-	}
+	eq(t, expected, result)
 }
 
 func TestCols(t *testing.T) {
@@ -870,6 +780,18 @@ func timeMustParse(str string) time.Time {
 		panic(err)
 	}
 	return out
+}
+
+func try(t testing.TB, err error) {
+	if err != nil {
+		t.Fatalf("%+v", err)
+	}
+}
+
+func eq(t testing.TB, exp, act interface{}) {
+	if !reflect.DeepEqual(exp, act) {
+		t.Fatalf("expected: %#v\nactual: %#v\n", exp, act)
+	}
 }
 
 type ScannableStruct struct {
