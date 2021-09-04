@@ -66,6 +66,23 @@ func runTestMain(m *testing.M) int {
 	return m.Run()
 }
 
+func TestQuery_nil_dest(t *testing.T) {
+	ctx, conn := testInit(t)
+
+	testQuery := func(dest interface{}, query string) {
+		try(t, Query(ctx, conn, dest, query, nil))
+	}
+
+	testQueries := func(dest interface{}) {
+		testQuery(dest, `select true where false`)
+		testQuery(dest, `select true`)
+		testQuery(dest, `select * from (values (true), (false)) as _`)
+	}
+
+	testQueries(nil)
+	testQueries((*bool)(nil))
+}
+
 func TestQuery_scalar_basic(t *testing.T) {
 	ctx, conn := testInit(t)
 
@@ -369,7 +386,6 @@ func TestQuery_invalid_dest(t *testing.T) {
 		}
 	}
 
-	test(nil)
 	test("str")
 	test(struct{}{})
 	test([]struct{}{})

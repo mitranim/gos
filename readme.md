@@ -34,6 +34,10 @@ Like many similar libraries, when selecting fields for nested records, Gos relie
 
 ## Changelog
 
+### 0.1.9
+
+`Query` allows nil output, using `conn.ExecContext` to discard the result.
+
 ### 0.1.8
 
 Support streaming via `QueryScanner` and `Scanner`.

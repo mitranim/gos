@@ -11,19 +11,28 @@ import (
 )
 
 /*
-Database connection passed to `Query()`. Satisfied by `*sql.DB`, `*sql.Tx`,
-may be satisfied by other types.
+Database connection required by `Query`. Satisfied by `*sql.DB`, `*sql.Tx`, may
+be satisfied by other types.
+*/
+type QueryExecer interface {
+	Queryer
+	Execer
+}
+
+/*
+Database connection required by `QueryScanner`. Satisfied by `*sql.DB`,
+`*sql.Tx`, may be satisfied by other types.
 */
 type Queryer interface {
 	QueryContext(context.Context, string, ...interface{}) (*sql.Rows, error)
 }
 
 /*
-Database connection passed to `SqlQuery.Exec`. Satisfied by `*sql.DB`,
-`*sql.Tx`, may be satisfied by other types.
+Subset of `QueryExecer`. Satisfied by `*sql.DB`, `*sql.Tx`, may be satisfied by
+other types.
 */
 type Execer interface {
-	ExecContext(context.Context, string, ...interface{}) (*sql.Result, error)
+	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
 }
 
 /*

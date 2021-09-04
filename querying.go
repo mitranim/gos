@@ -41,10 +41,15 @@ func QueryScanner(ctx context.Context, conn Queryer, query string, args []interf
 /*
 Shortcut for scanning columns into the destination, which may be one of:
 
-	* Single scalar.
-	* Slice of scalars.
-	* Single struct.
-	* Slice of structs.
+	* Nil interface{}.
+	* Nil pointer.
+	* Pointer to single scalar.
+	* Pointer to slice of scalars.
+	* Pointer to single struct.
+	* Pointer to slice of structs.
+
+When the output is nil interface{} or nil pointer, this calls
+`conn.ExecContext`, discarding the result.
 
 When the output is a slice, the query should use a small `limit`. When
 processing a large data set, prefer `QueryScanner()` to scan rows one-by-one
@@ -75,8 +80,16 @@ The query should have:
 The easiest way to generate the query correctly is by calling `sqlb.Cols(dest)`,
 using the sibling package "github.com/mitranim/sqlb".
 */
-func Query(ctx context.Context, conn Queryer, dest interface{}, query string, args []interface{}) error {
-	err := validateDest(dest)
+func Query(ctx context.Context, conn QueryExecer, dest interface{}, query string, args []interface{}) error {
+	if isNilDest(dest) {
+		_, err := conn.ExecContext(ctx, query, args...)
+		if err != nil {
+			return Err{While: `executing query`, Cause: err}
+		}
+		return nil
+	}
+
+	err := validateDestPtr(dest)
 	if err != nil {
 		return err
 	}
@@ -87,7 +100,7 @@ func Query(ctx context.Context, conn Queryer, dest interface{}, query string, ar
 	}
 	defer scan.Close()
 
-	if rtypeDerefKind(reflect.TypeOf(dest)) == reflect.Slice {
+	if expectManyRows(dest) {
 		return scanMany(dest, scan)
 	}
 	return scanOne(dest, scan)
@@ -173,7 +186,7 @@ type scanner struct {
 func (self *scanner) Scan(dest interface{}) error {
 	rval := reflect.ValueOf(dest)
 
-	err := validateDest(dest)
+	err := validateDestPtr(dest)
 	if err != nil {
 		return err
 	}
@@ -430,12 +443,23 @@ func traverseDecode(
 	return nil
 }
 
-func validateDest(dest interface{}) error {
-	rval := reflect.ValueOf(dest)
-	if rval.IsValid() && rval.Kind() == reflect.Ptr && !rval.IsNil() {
-		return nil
+func isNilDest(val interface{}) bool {
+	if val == nil {
+		return true
 	}
-	return ErrInvalidDest.because(fmt.Errorf(`destination must be a non-nil pointer, received %#v`, dest))
+
+	rval := reflect.ValueOf(val)
+	return rval.Kind() == reflect.Ptr && rval.IsNil()
+}
+
+func validateDestPtr(val interface{}) error {
+	rval := reflect.ValueOf(val)
+	if rval.Kind() != reflect.Ptr || rval.IsNil() {
+		return ErrInvalidDest.because(fmt.Errorf(
+			`destination must be non-nil pointer, received %#v`, val,
+		))
+	}
+	return nil
 }
 
 func validateMatchingDestType(expected, found reflect.Type) error {
@@ -443,4 +467,8 @@ func validateMatchingDestType(expected, found reflect.Type) error {
 		return ErrInvalidDest.because(fmt.Errorf(`destination must be of type %v, received %v`, expected, found))
 	}
 	return nil
+}
+
+func expectManyRows(val interface{}) bool {
+	return rtypeDerefKind(reflect.TypeOf(val)) == reflect.Slice
 }
