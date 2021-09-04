@@ -66,12 +66,12 @@ func runTestMain(m *testing.M) int {
 	return m.Run()
 }
 
-func TestScalarBasic(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_scalar_basic(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var result string
 	query := `select 'blah'`
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	expected := "blah"
 	if expected != result {
@@ -79,12 +79,12 @@ func TestScalarBasic(t *testing.T) {
 	}
 }
 
-func TestScalarNonNullable(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_scalar_non_nullable(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var result string
 	query := `select null`
-	err := Query(ctx, tx, &result, query, nil)
+	err := Query(ctx, conn, &result, query, nil)
 	/**
 	Why this doesn't inspect the error: the error comes from `database/sql`;
 	there's no programmatic API to detect its type. We return an `ErrNull` in
@@ -95,12 +95,12 @@ func TestScalarNonNullable(t *testing.T) {
 	}
 }
 
-func TestScalarNullable(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_scalar_nullable(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var result *string
 	query := `select 'blah'`
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	expected := "blah"
 	if expected != *result {
@@ -108,30 +108,30 @@ func TestScalarNullable(t *testing.T) {
 	}
 
 	query = `select null`
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	if result != nil {
 		t.Fatalf(`expected selecting null to produce nil, got %q`, *result)
 	}
 }
 
-func TestScalarsBasic(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_scalars_basic(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var results []string
 	query := `select * from (values ('one'), ('two'), ('three')) as _`
-	try(t, Query(ctx, tx, &results, query, nil))
+	try(t, Query(ctx, conn, &results, query, nil))
 
 	expected := []string{"one", "two", "three"}
 	eq(t, expected, results)
 }
 
-func TestScalarsNonNullable(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_scalars_non_nullable(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var results []string
 	query := `select * from (values ('one'), (null), ('three')) as _`
-	err := Query(ctx, tx, &results, query, nil)
+	err := Query(ctx, conn, &results, query, nil)
 	/**
 	Why this doesn't inspect the error: the error comes from `database/sql`;
 	there's no programmatic API to detect its type. We return an `ErrNull` in
@@ -142,24 +142,24 @@ func TestScalarsNonNullable(t *testing.T) {
 	}
 }
 
-func TestScalarsNullable(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_scalars_nullable(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var results []*string
 	query := `select * from (values ('one'), (null), ('three')) as _`
-	try(t, Query(ctx, tx, &results, query, nil))
+	try(t, Query(ctx, conn, &results, query, nil))
 
 	expected := []*string{strPtr("one"), nil, strPtr("three")}
 	eq(t, expected, results)
 }
 
 // Verify that we treat `time.Time` as an atomic scannable rather than a struct.
-func TestScalarTime(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_scalar_time(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var result time.Time
 	query := `select '0001-01-01'::timestamp`
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	expected := timeMustParse(`0001-01-01T00:00:00Z`)
 	if expected.UnixNano() != result.UnixNano() {
@@ -168,12 +168,12 @@ func TestScalarTime(t *testing.T) {
 }
 
 // Verify that we treat `[]time.Time` as atomic scannables rather than structs.
-func TestScalarsTime(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_scalars_time(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var results []time.Time
 	query := `select * from (values ('0001-01-01'::timestamp), ('0002-01-01'::timestamp)) as _`
-	try(t, Query(ctx, tx, &results, query, nil))
+	try(t, Query(ctx, conn, &results, query, nil))
 
 	expected := []int64{
 		timeMustParse(`0001-01-01T00:00:00Z`).UnixNano(),
@@ -188,12 +188,12 @@ func TestScalarsTime(t *testing.T) {
 	eq(t, expected, received)
 }
 
-func TestScalarScannable(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_scalar_scannable(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var result ScannableString
 	query := `select 'blah'`
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	expected := "blah_scanned"
 	received := string(result)
@@ -202,12 +202,12 @@ func TestScalarScannable(t *testing.T) {
 	}
 }
 
-func TestScalarsScannable(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_scalars_scannable(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var results []ScannableString
 	query := `select * from (values ('one'), ('two'), ('three')) as _`
-	try(t, Query(ctx, tx, &results, query, nil))
+	try(t, Query(ctx, conn, &results, query, nil))
 
 	expected := []string{"one_scanned", "two_scanned", "three_scanned"}
 	received := *(*[]string)(unsafe.Pointer(&results))
@@ -220,12 +220,12 @@ truncate the slice to empty, while retaining its nil or non-nil status, without
 forcing it to become nil or non-nil. This allows users to define their own
 empty semantics.
 */
-func TestScalarsEmpty(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_scalars_empty(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	test := func(exp, res []string) {
 		query := `select 'blah' where false`
-		try(t, Query(ctx, tx, &res, query, nil))
+		try(t, Query(ctx, conn, &res, query, nil))
 		eq(t, exp, res)
 	}
 
@@ -234,12 +234,12 @@ func TestScalarsEmpty(t *testing.T) {
 	test([]string{}, []string{"blah"})
 }
 
-func TestStructScannable(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_scannable(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var result ScannableStruct
 	query := `select 'blah'`
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	expected := ScannableStruct{Value: "blah_scanned"}
 	if expected != result {
@@ -247,19 +247,19 @@ func TestStructScannable(t *testing.T) {
 	}
 }
 
-func TestStructsScannable(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_structs_scannable(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var results []ScannableStruct
 	query := `select * from (values ('one'), ('two'), ('three')) as _`
-	try(t, Query(ctx, tx, &results, query, nil))
+	try(t, Query(ctx, conn, &results, query, nil))
 
 	expected := []ScannableStruct{{"one_scanned"}, {"two_scanned"}, {"three_scanned"}}
 	eq(t, expected, results)
 }
 
-func TestStructWithBasicTypes(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_with_basic_types(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var result struct {
 		Int32   int32           `db:"int32"`
@@ -284,7 +284,7 @@ func TestStructWithBasicTypes(t *testing.T) {
 		'scan'            :: text      as scan
 	`
 
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	tFieldEq(t, "Int32", result.Int32, int32(1))
 	tFieldEq(t, "Int64", result.Int64, int64(2))
@@ -298,8 +298,8 @@ func TestStructWithBasicTypes(t *testing.T) {
 	tFieldEq(t, "Scan", result.Scan, ScannableString("scan_scanned"))
 }
 
-func TestStructFieldNaming(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_field_naming(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var result struct {
 		One   string   `db:"one"`
@@ -326,7 +326,7 @@ func TestStructFieldNaming(t *testing.T) {
 		'three' as seven
 	`
 
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	tFieldEq(t, "One", result.One, "one")
 	tFieldEq(t, "Two", *result.Two, "two")
@@ -335,53 +335,48 @@ func TestStructFieldNaming(t *testing.T) {
 	tFieldEq(t, "Five", result.Five, "5")
 }
 
-func TestStructNoRows(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_no_rows(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var result struct{}
 	query := `select where false`
-	err := Query(ctx, tx, &result, query, nil)
+	err := Query(ctx, conn, &result, query, nil)
 	if !errors.Is(err, ErrNoRows) {
 		t.Fatalf(`expected error ErrNoRows, got %+v`, err)
 	}
 }
 
-func TestStructMultipleRows(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_multiple_rows(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var result struct {
 		Val string `db:"val"`
 	}
 	query := `select * from (values ('one'), ('two')) as vals (val)`
-	err := Query(ctx, tx, &result, query, nil)
+	err := Query(ctx, conn, &result, query, nil)
 	if !errors.Is(err, ErrMultipleRows) {
 		t.Fatalf(`expected error ErrMultipleRows, got %+v`, err)
 	}
 }
 
-func TestInvalidDest(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_invalid_dest(t *testing.T) {
+	ctx, conn := testInit(t)
 
-	err := Query(ctx, tx, nil, `select`, nil)
-	if !errors.Is(err, ErrInvalidDest) {
-		t.Fatalf(`expected error ErrInvalidDest, got %+v`, err)
+	test := func(dest interface{}) {
+		err := Query(ctx, conn, dest, `select true`, nil)
+		if !errors.Is(err, ErrInvalidDest) {
+			t.Fatalf(`expected error ErrInvalidDest, got %+v`, err)
+		}
 	}
-	err = Query(ctx, tx, "str", `select`, nil)
-	if !errors.Is(err, ErrInvalidDest) {
-		t.Fatalf(`expected error ErrInvalidDest, got %+v`, err)
-	}
-	err = Query(ctx, tx, struct{}{}, `select`, nil)
-	if !errors.Is(err, ErrInvalidDest) {
-		t.Fatalf(`expected error ErrInvalidDest, got %+v`, err)
-	}
-	err = Query(ctx, tx, []struct{}{}, `select`, nil)
-	if !errors.Is(err, ErrInvalidDest) {
-		t.Fatalf(`expected error ErrInvalidDest, got %+v`, err)
-	}
+
+	test(nil)
+	test("str")
+	test(struct{}{})
+	test([]struct{}{})
 }
 
-func TestStructFieldNullability(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_field_nullability(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	type Result struct {
 		NonNilable string  `db:"non_nilable"`
@@ -396,7 +391,7 @@ func TestStructFieldNullability(t *testing.T) {
 		null  as nilable
 	`
 
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	expected := Result{NonNilable: "one", Nilable: nil}
 	if expected != result {
@@ -404,8 +399,8 @@ func TestStructFieldNullability(t *testing.T) {
 	}
 }
 
-func TestStructs(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_structs(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	type Result struct {
 		One string `db:"one"`
@@ -414,14 +409,14 @@ func TestStructs(t *testing.T) {
 
 	var results []Result
 	query := `select * from (values ('one', 10), ('two', 20)) as vals (one, two)`
-	try(t, Query(ctx, tx, &results, query, nil))
+	try(t, Query(ctx, conn, &results, query, nil))
 
 	expected := []Result{{"one", 10}, {"two", 20}}
 	eq(t, expected, results)
 }
 
-func TestStructMissingColDest(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_missing_col_dest(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	var result struct {
 		One string `db:"one"`
@@ -429,7 +424,7 @@ func TestStructMissingColDest(t *testing.T) {
 
 	{
 		query := `select 'one' as one, 'two' as two`
-		err := Query(ctx, tx, &result, query, nil)
+		err := Query(ctx, conn, &result, query, nil)
 		if !errors.Is(err, ErrNoColDest) {
 			t.Fatalf(`expected error ErrNoColDest, got %+v`, err)
 		}
@@ -437,37 +432,37 @@ func TestStructMissingColDest(t *testing.T) {
 
 	{
 		query := `select 'one' as one, null::text as two`
-		err := Query(ctx, tx, &result, query, nil)
+		err := Query(ctx, conn, &result, query, nil)
 		if !errors.Is(err, ErrNoColDest) {
 			t.Fatalf(`expected error ErrNoColDest, got %+v`, err)
 		}
 	}
 }
 
-func TestScalarsEmptyResult(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_scalars_empty_result(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	results := []string{"one", "two", "three"}
 	query := `select where false`
-	try(t, Query(ctx, tx, &results, query, nil))
+	try(t, Query(ctx, conn, &results, query, nil))
 
 	expected := []string{}
 	eq(t, expected, results)
 }
 
-func TestStructsEmptyResult(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_structs_empty_result(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	results := []struct{}{{}, {}, {}}
 	query := `select where false`
-	try(t, Query(ctx, tx, &results, query, nil))
+	try(t, Query(ctx, conn, &results, query, nil))
 
 	expected := []struct{}{}
 	eq(t, expected, results)
 }
 
-func TestStructNestedNotNullNotNilable(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_nested_not_null_not_nilable(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	type Nested struct {
 		Val string `db:"val"`
@@ -483,14 +478,14 @@ func TestStructNestedNotNullNotNilable(t *testing.T) {
 		'one' as "val",
 		'two' as "nested.val"
 	`
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	expected := Nesting{Val: "one", Nested: Nested{Val: "two"}}
 	eq(t, expected, result)
 }
 
-func TestStructNestedNotNullNilableStruct(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_nested_not_null_nilable_struct(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	type Nested struct {
 		Val string `db:"val"`
@@ -506,14 +501,14 @@ func TestStructNestedNotNullNilableStruct(t *testing.T) {
 		'one' as "val",
 		'two' as "nested.val"
 	`
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	expected := Nesting{Val: "one", Nested: &Nested{Val: "two"}}
 	eq(t, expected, result)
 }
 
-func TestStructNestedNotNullNilableField(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_nested_not_null_nilable_field(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	type Nested struct {
 		Val *string `db:"val"`
@@ -529,14 +524,14 @@ func TestStructNestedNotNullNilableField(t *testing.T) {
 		'one' as "val",
 		'two' as "nested.val"
 	`
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	expected := Nesting{Val: "one", Nested: Nested{Val: strPtr("two")}}
 	eq(t, expected, result)
 }
 
-func TestStructNestedNotNullNilableBoth(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_nested_not_null_nilable_both(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	type Nested struct {
 		Val *string `db:"val"`
@@ -552,14 +547,14 @@ func TestStructNestedNotNullNilableBoth(t *testing.T) {
 		'one' as "val",
 		'two' as "nested.val"
 	`
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	expected := Nesting{Val: "one", Nested: &Nested{Val: strPtr("two")}}
 	eq(t, expected, result)
 }
 
-func TestStructNestedNullNotNilable(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_nested_null_not_nilable(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	type Nested struct {
 		Val string `db:"val"`
@@ -575,7 +570,7 @@ func TestStructNestedNullNotNilable(t *testing.T) {
 		'one' as "val",
 		null as "nested.val"
 	`
-	err := Query(ctx, tx, &result, query, nil)
+	err := Query(ctx, conn, &result, query, nil)
 	if !errors.Is(err, ErrNull) {
 		t.Fatalf(`expected error ErrNull, got %+v`, err)
 	}
@@ -583,8 +578,8 @@ func TestStructNestedNullNotNilable(t *testing.T) {
 
 // This also tests for on-demand allocation: if all fields of the inner struct
 // are nil, the struct is not allocated.
-func TestStructNestedNullNilableStruct(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_nested_null_nilable_struct(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	type Nested struct {
 		Val string `db:"val"`
@@ -600,14 +595,14 @@ func TestStructNestedNullNilableStruct(t *testing.T) {
 		'one' as "val",
 		null as "nested.val"
 	`
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	expected := Nesting{Val: "one", Nested: nil}
 	eq(t, expected, result)
 }
 
-func TestStructNestedNullNilableField(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_nested_null_nilable_field(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	type Nested struct {
 		Val *string `db:"val"`
@@ -623,7 +618,7 @@ func TestStructNestedNullNilableField(t *testing.T) {
 		'one' as "val",
 		null as "nested.val"
 	`
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	expected := Nesting{Val: "one", Nested: Nested{Val: nil}}
 	eq(t, expected, result)
@@ -631,8 +626,8 @@ func TestStructNestedNullNilableField(t *testing.T) {
 
 // This also tests for on-demand allocation: if all fields of the inner struct
 // are nil, the struct is not allocated.
-func TestStructNestedNullNilableBoth(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_nested_null_nilable_both(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	type Nested struct {
 		Val *string `db:"val"`
@@ -648,14 +643,14 @@ func TestStructNestedNullNilableBoth(t *testing.T) {
 		'one' as "val",
 		null as "nested.val"
 	`
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	expected := Nesting{Val: "one", Nested: nil}
 	eq(t, expected, result)
 }
 
-func TestStructNestedPartiallyNull(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_nested_partially_null(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	type Nested struct {
 		One *string `db:"one"`
@@ -672,7 +667,7 @@ func TestStructNestedPartiallyNull(t *testing.T) {
 		'one'   as "nested.one",
 		'three' as "three"
 	`
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	expected := Nesting{Nested: &Nested{One: strPtr("one")}, Three: "three"}
 	eq(t, expected, result)
@@ -682,8 +677,8 @@ func TestStructNestedPartiallyNull(t *testing.T) {
 Fields without a matching source column must be left untouched. If they have
 non-zero values, the existing values must be preserved.
 */
-func TestStructMissingColSrc(t *testing.T) {
-	ctx, tx := testInit(t)
+func TestQuery_struct_missing_col_src(t *testing.T) {
+	ctx, conn := testInit(t)
 
 	type Result struct {
 		One   string  `db:"one"`
@@ -694,7 +689,7 @@ func TestStructMissingColSrc(t *testing.T) {
 
 	result := Result{Two: "two", Three: strPtr("three"), Four: &Result{One: "four"}}
 	query := `select 'one' as one`
-	try(t, Query(ctx, tx, &result, query, nil))
+	try(t, Query(ctx, conn, &result, query, nil))
 
 	expected := Result{One: "one", Two: "two", Three: strPtr("three"), Four: &Result{One: "four"}}
 	eq(t, expected, result)
@@ -751,12 +746,12 @@ func testInit(t *testing.T) (context.Context, *sql.Tx) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	tx, err := testDb.BeginTx(ctx, nil)
+	conn, err := testDb.BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatalf("failed to start DB transaction: %+v", err)
 	}
 
-	return ctx, tx
+	return ctx, conn
 }
 
 func tFieldEq(t *testing.T, fieldName string, left interface{}, right interface{}) {
