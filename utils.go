@@ -122,3 +122,51 @@ func rtypeDerefKind(rtype reflect.Type) reflect.Kind {
 func rtypeDerefElem(rtype reflect.Type) reflect.Type {
 	return refut.RtypeDeref(rtype).Elem()
 }
+
+func rvalZero(rval reflect.Value) {
+	rval.Set(reflect.Zero(rval.Type()))
+}
+
+/*
+Adapted from `refut.RvalFieldByPathAlloc` but specialized for zeroing rather
+than allocating.
+*/
+func rvalZeroAtPath(rval reflect.Value, path []int) {
+	for len(path) > 0 {
+		for rval.Kind() == reflect.Ptr {
+			if rval.IsNil() {
+				return
+			}
+			rval = rval.Elem()
+		}
+
+		if rval.Kind() != reflect.Struct {
+			panic(refut.ErrInvalidValue)
+		}
+
+		rval = rval.Field(path[0])
+		path = path[1:]
+	}
+
+	rvalZero(rval)
+}
+
+// Assumes that types of `src` and `tar` match.
+func set(tar, src reflect.Value) {
+	if tar.Kind() == reflect.Ptr {
+		if tar.IsNil() {
+			tar.Set(src)
+			return
+		}
+
+		if src.IsNil() {
+			rvalZero(tar)
+			return
+		}
+
+		tar.Elem().Set(src.Elem())
+		return
+	}
+
+	tar.Set(src)
+}

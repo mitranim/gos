@@ -34,6 +34,14 @@ Like many similar libraries, when selecting fields for nested records, Gos relie
 
 ## Changelog
 
+### 0.1.10
+
+Improved how `Query` and `Scanner` handle previously-existing values in the output, especially in regards to pointers.
+
+When a row contains `null`, the corresponding Go value is now zeroed rather than ignored. The old non-zeroing behavior was aligned with `encoding/json`. The new behavior diverges from it.
+
+When a row contains non-`null` and the corresponding Go value is a non-nil pointer, the value is written to the pointer's target, without replacing the pointer.
+
 ### 0.1.9
 
 `Query` allows nil output, using `conn.ExecContext` to discard the result.

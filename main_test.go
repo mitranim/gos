@@ -711,6 +711,29 @@ func TestQuery_struct_missing_col_src(t *testing.T) {
 	eq(t, expected, result)
 }
 
+func TestQuery_write_to_existing_pointer(t *testing.T) {
+	ctx, conn := testInit(t)
+
+	type Result struct {
+		Val *string `db:"val"`
+	}
+
+	var target string
+
+	result := Result{&target}
+	query := `select 'val' as val`
+	try(t, Query(ctx, conn, &result, query, nil))
+
+	eq(t, Result{&target}, result)
+	eq(t, `val`, target)
+
+	query = `select null::text as val`
+	try(t, Query(ctx, conn, &result, query, nil))
+
+	eq(t, Result{nil}, result)
+	eq(t, `val`, target)
+}
+
 func TestCols(t *testing.T) {
 	type Nested struct {
 		Val *string `db:"val"`
@@ -800,6 +823,7 @@ func try(t testing.TB, err error) {
 }
 
 func eq(t testing.TB, exp, act interface{}) {
+	t.Helper()
 	if !reflect.DeepEqual(exp, act) {
 		t.Fatalf("expected: %#v\nactual: %#v\n", exp, act)
 	}

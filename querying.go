@@ -415,6 +415,7 @@ func traverseDecode(
 
 		if colRval.IsNil() {
 			if refut.IsRkindNilable(sfield.Type.Kind()) {
+				rvalZeroAtPath(rootRval, fieldSpec.fieldPath)
 				continue
 			}
 
@@ -436,8 +437,7 @@ func traverseDecode(
 			}
 		}
 
-		fieldRval := refut.RvalFieldByPathAlloc(rootRval, fieldSpec.fieldPath)
-		fieldRval.Set(colRval.Elem())
+		set(refut.RvalFieldByPathAlloc(rootRval, fieldSpec.fieldPath), colRval.Elem())
 	}
 
 	return nil
