@@ -1,3 +1,5 @@
+**Moved to https://github.com/mitranim/gg**. This repo is usable but frozen.
+
 ## Overview
 
 **Go** ↔︎ **S**QL: tool for decoding results into Go structs. Supports streaming.
