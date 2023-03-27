@@ -64,6 +64,7 @@ func stringIndex(strs []string, str string) int {
 
 var timeRtype = reflect.TypeOf(time.Time{})
 var sqlScannerRtype = reflect.TypeOf((*sql.Scanner)(nil)).Elem()
+var nullableRtype = reflect.TypeOf((*interface{ IsNull() bool })(nil)).Elem()
 
 func isRtypeScannable(rtype reflect.Type) bool {
 	return rtype != nil &&
@@ -87,7 +88,7 @@ func copyIntSlice(src []int) []int {
 
 func isNilableOrHasNilableNonRootAncestor(fieldSpec *tFieldSpec) bool {
 	for fieldSpec != nil {
-		if refut.IsRkindNilable(fieldSpec.typeSpec.rtype.Kind()) {
+		if isRtypeNilable(fieldSpec.typeSpec.rtype) {
 			return true
 		}
 		fieldSpec = fieldSpec.parentFieldSpec
@@ -169,4 +170,8 @@ func set(tar, src reflect.Value) {
 	}
 
 	tar.Set(src)
+}
+
+func isRtypeNilable(val reflect.Type) bool {
+	return refut.IsRkindNilable(val.Kind()) || val.ConvertibleTo(nullableRtype)
 }

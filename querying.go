@@ -124,10 +124,9 @@ type tTypeSpec struct {
 type tFieldSpec struct {
 	parentFieldSpec *tFieldSpec
 	typeSpec        tTypeSpec
-	fieldIndex      int
 	fieldPath       []int // Relative to root struct.
 	colName         string
-	uniqColAlias    string
+	colAlias        string
 	colIndex        int // Must be initialized to -1.
 	sfield          reflect.StructField
 }
@@ -260,7 +259,7 @@ func prepareDestSpec(rows *sql.Rows, rtype reflect.Type) (*tDestSpec, error) {
 
 	colPath := make([]string, 0, expectedStructDepth)
 	fieldPath := make([]int, 0, expectedStructDepth)
-	err = traverseMakeSpec(spec, &spec.typeSpec, nil, colPath, fieldPath)
+	err = traverseMakeSpec(rtype, spec, &spec.typeSpec, nil, colPath, fieldPath)
 	if err != nil {
 		return nil, err
 	}
@@ -282,12 +281,14 @@ func prepareDecodeState(rows *sql.Rows, spec *tDestSpec) (*tDecodeState, error) 
 	colPtrs := make([]interface{}, 0, len(spec.colNames))
 	for _, colName := range spec.colNames {
 		if spec.colRtypes[colName] == nil {
-			return nil, Err{
+			panic(Err{
 				Code:  ErrCodeNoColDest,
 				While: `preparing decode state`,
-				Cause: fmt.Errorf(`column %q doesn't have a matching destination in type %q`,
-					colName, spec.typeSpec.rtype),
-			}
+				Cause: fmt.Errorf(
+					`column %q doesn't have a matching destination in type %q`,
+					colName, spec.typeSpec.rtype,
+				),
+			})
 		}
 		colPtrs = append(colPtrs, reflect.New(reflect.PtrTo(spec.colRtypes[colName])).Interface())
 	}
@@ -295,21 +296,22 @@ func prepareDecodeState(rows *sql.Rows, spec *tDestSpec) (*tDecodeState, error) 
 }
 
 func traverseMakeSpec(
-	spec *tDestSpec, typeSpec *tTypeSpec, parentFieldSpec *tFieldSpec, colPath []string, fieldPath []int,
+	typ reflect.Type,
+	spec *tDestSpec, typeSpec *tTypeSpec, parentFieldSpec *tFieldSpec,
+	colPath []string, fieldPath []int,
 ) error {
-	rtypeElem := refut.RtypeDeref(typeSpec.rtype)
-	typeSpec.fieldSpecs = make([]tFieldSpec, rtypeElem.NumField())
+	typ = refut.RtypeDeref(typ)
+	typeSpec.fieldSpecs = make([]tFieldSpec, typ.NumField())
 
-	for i := 0; i < rtypeElem.NumField(); i++ {
-		sfield := rtypeElem.Field(i)
-		fieldRtype := refut.RtypeDeref(sfield.Type)
+	for i := 0; i < typ.NumField(); i++ {
+		sfield := typ.Field(i)
+		fieldTypeInner := refut.RtypeDeref(sfield.Type)
 		fieldPath := append(fieldPath, i)
-
 		fieldSpec := &typeSpec.fieldSpecs[i]
+
 		*fieldSpec = tFieldSpec{
 			parentFieldSpec: parentFieldSpec,
 			typeSpec:        tTypeSpec{rtype: sfield.Type},
-			fieldIndex:      i,
 			fieldPath:       copyIntSlice(fieldPath),
 			colIndex:        -1,
 			sfield:          sfield,
@@ -319,8 +321,8 @@ func traverseMakeSpec(
 			continue
 		}
 
-		if sfield.Anonymous && fieldRtype.Kind() == reflect.Struct {
-			err := traverseMakeSpec(spec, &fieldSpec.typeSpec, fieldSpec, colPath, fieldPath)
+		if sfield.Anonymous && fieldTypeInner.Kind() == reflect.Struct {
+			err := traverseMakeSpec(fieldTypeInner, spec, &fieldSpec.typeSpec, fieldSpec, colPath, fieldPath)
 			if err != nil {
 				return err
 			}
@@ -332,21 +334,34 @@ func traverseMakeSpec(
 			continue
 		}
 
-		colPath := append(colPath, fieldSpec.colName)
-		fieldSpec.uniqColAlias = strings.Join(colPath, ".")
-		fieldSpec.colIndex = stringIndex(spec.colNames, fieldSpec.uniqColAlias)
+		for fieldTypeInner.Kind() == reflect.Struct && fieldTypeInner.NumField() > 0 {
+			const ind = 0
+			head := fieldTypeInner.Field(ind)
 
-		if spec.colRtypes[fieldSpec.uniqColAlias] != nil {
+			if head.Tag.Get(`role`) == `ref` {
+				fieldPath = append(fieldPath, ind)
+				// fieldSpec.fieldPath = copyIntSlice(fieldPath)
+				fieldTypeInner = head.Type
+				continue
+			}
+			break
+		}
+
+		colPath := append(colPath, fieldSpec.colName)
+		fieldSpec.colAlias = strings.Join(colPath, ".")
+		fieldSpec.colIndex = stringIndex(spec.colNames, fieldSpec.colAlias)
+
+		if spec.colRtypes[fieldSpec.colAlias] != nil {
 			return Err{
 				Code:  ErrCodeRedundantCol,
 				While: `preparing destination spec`,
-				Cause: fmt.Errorf(`redundant occurrence of column %q`, fieldSpec.uniqColAlias),
+				Cause: fmt.Errorf(`redundant occurrence of column %q`, fieldSpec.colAlias),
 			}
 		}
-		spec.colRtypes[fieldSpec.uniqColAlias] = sfield.Type
+		spec.colRtypes[fieldSpec.colAlias] = sfield.Type
 
-		if isRtypeStructNonScannable(fieldRtype) {
-			err := traverseMakeSpec(spec, &fieldSpec.typeSpec, fieldSpec, colPath, fieldPath)
+		if isRtypeStructNonScannable(fieldTypeInner) {
+			err := traverseMakeSpec(fieldTypeInner, spec, &fieldSpec.typeSpec, fieldSpec, colPath, fieldPath)
 			if err != nil {
 				return err
 			}
@@ -364,13 +379,13 @@ func traverseDecode(
 	for i := range typeSpec.fieldSpecs {
 		fieldSpec := &typeSpec.fieldSpecs[i]
 		sfield := fieldSpec.sfield
-		fieldRtype := refut.RtypeDeref(sfield.Type)
+		fieldTypeInner := refut.RtypeDeref(sfield.Type)
 
 		if !refut.IsSfieldExported(sfield) {
 			continue
 		}
 
-		if sfield.Anonymous && fieldRtype.Kind() == reflect.Struct {
+		if sfield.Anonymous && fieldTypeInner.Kind() == reflect.Struct {
 			err := traverseDecode(rootRval, spec, state, &fieldSpec.typeSpec, fieldSpec)
 			if err != nil {
 				return err
@@ -382,7 +397,7 @@ func traverseDecode(
 			continue
 		}
 
-		if isRtypeStructNonScannable(fieldRtype) {
+		if isRtypeStructNonScannable(fieldTypeInner) {
 			err := traverseDecode(rootRval, spec, state, &fieldSpec.typeSpec, fieldSpec)
 			if err != nil {
 				return err
@@ -414,7 +429,7 @@ func traverseDecode(
 		colRval := reflect.ValueOf(state.colPtrs[fieldSpec.colIndex]).Elem()
 
 		if colRval.IsNil() {
-			if refut.IsRkindNilable(sfield.Type.Kind()) {
+			if isRtypeNilable(sfield.Type) {
 				rvalZeroAtPath(rootRval, fieldSpec.fieldPath)
 				continue
 			}
@@ -432,8 +447,10 @@ func traverseDecode(
 			return Err{
 				Code:  ErrCodeNull,
 				While: `decoding into struct`,
-				Cause: fmt.Errorf(`type %q at field %q of struct %q is not nilable, but corresponding column %q was null`,
-					sfield.Type, sfield.Name, typeSpec.rtype, fieldSpec.uniqColAlias),
+				Cause: fmt.Errorf(
+					`type %q at field %q of struct %q is not nilable, but corresponding column %q was null`,
+					sfield.Type, sfield.Name, typeSpec.rtype, fieldSpec.colAlias,
+				),
 			}
 		}
 
